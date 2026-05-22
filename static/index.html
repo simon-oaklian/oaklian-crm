@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OAKLIAN CRM</title>
+  <link rel="icon" href="/assets/images/favicon.png" />
+  <link rel="stylesheet" href="/assets/css/styles.css?v=20260504-navy" />
+  <link rel="stylesheet" href="/assets/css/estimates_v2.css?v=20260504-navy" />
+</head>
+<body>
+  <div id="login-view" class="login-wrap"></div>
+
+  <div id="app-view" class="layout hidden">
+    <aside class="sidebar">
+      <img id="brand-icon" class="brand-icon" src="/assets/images/logo-oaklian-light.png" alt="Oaklian Remodeling Logo" />
+      <h1 id="brand-name">OAKLIAN</h1>
+      <div id="brand-subtitle">REMODELING</div>
+      <div id="brand-tagline" class="brand-tagline">REMODELING &amp; CONSTRUCTION</div>
+      <nav id="menu" class="menu"></nav>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <div>
+          <h2 id="page-title"></h2>
+          <p id="page-desc"></p>
+        </div>
+        <div class="top-actions">
+          <select id="lang-select">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
+          <div class="notif-wrap">
+            <button id="notification-btn" class="secondary notif-btn" type="button">
+              <span id="notification-btn-label">通知</span>
+              <span id="notification-unread-badge" class="notif-badge hidden">0</span>
+            </button>
+            <div id="notification-popover" class="notif-popover hidden"></div>
+          </div>
+          <div id="user-meta" class="user-meta"></div>
+          <button id="logout-btn" class="secondary"></button>
+        </div>
+      </header>
+      <main id="main"></main>
+    </div>
+  </div>
+  <div id="project-detail-drawer" class="drawer hidden"></div>
+  <div id="vendor-ledger-drawer" class="drawer hidden"></div>
+  <div id="project-cost-ledger-drawer" class="drawer hidden"></div>
+  <script src="/assets/js/app.js"></script>
+  <script src="/assets/js/estimates_v2.js"></script>
+</body>
+</html>

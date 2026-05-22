@@ -1,0 +1,51 @@
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+*secret*
+*secrets*
+*credential*
+*credentials*
+*token*
+*oauth*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Customer/private runtime data
+crm.db
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+uploads/
+backups/
+
+# Logs/runtime
+*.log
+logs/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# Historical snapshots and generated backups
+*.bak
+*.bak*
+*.before_*
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+
+# Local/editor/system
+.DS_Store
+._*
+.vscode/
+.cursor/
+
+# Generated/customer documents
+data/documents/

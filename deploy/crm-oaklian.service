@@ -1,0 +1,21 @@
+[Unit]
+Description=Oaklian CRM Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/crm-oaklian
+EnvironmentFile=-/opt/crm-oaklian/.env
+ExecStartPre=/usr/bin/mkdir -p /opt/crm-oaklian/logs /opt/crm-oaklian/uploads
+ExecStart=/usr/bin/python3 /opt/crm-oaklian/app.py
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+StandardOutput=append:/opt/crm-oaklian/logs/app.log
+StandardError=append:/opt/crm-oaklian/logs/error.log
+
+[Install]
+WantedBy=multi-user.target
