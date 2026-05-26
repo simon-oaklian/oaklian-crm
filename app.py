@@ -18,6 +18,7 @@ import estimates_v2_module as ev2_routes
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 ASSETS_DIR = BASE_DIR / "assets"
+ARCHIVED_DOCUMENTS_DIR = BASE_DIR / "data" / "documents"
 
 
 def _env_str(name, default):
@@ -4535,6 +4536,9 @@ class CRMHandler(BaseHTTPRequestHandler):
         user = self._require_auth()
         if not user:
             return
+
+        if path.startswith("/data/documents/"):
+            return self._serve_static_file(unquote(path[len("/data/documents/") :]), ARCHIVED_DOCUMENTS_DIR)
 
         if path == "/api/dashboard":
             if not self._require_module(user, "dashboard"):
