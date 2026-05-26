@@ -68,7 +68,7 @@ body {
 .brand-icon {
   width: 62px;
   height: 62px;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
   flex: 0 0 62px;
   border-radius: 3px;
