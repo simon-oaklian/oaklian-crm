@@ -60,13 +60,13 @@ body {
 }
 .sidebar h1 { margin: 0; font-size: 28px; line-height: 1.05; letter-spacing: 1px; }
 .brand-icon {
-  width: 118px;
-  max-width: 82%;
-  max-height: 86px;
+  width: 82px;
+  max-width: 64%;
+  max-height: 64px;
   height: auto;
   object-fit: contain;
   display: block;
-  margin: 2px auto 8px;
+  margin: 0 auto 14px;
 }
 #brand-subtitle { font-size: 17px; letter-spacing: 2px; font-weight: 600; color: #F1F5F9; }
 .brand-tagline { color: #CBD5E1; font-size: 11px; letter-spacing: 0.8px; margin: 6px 0 12px; }
