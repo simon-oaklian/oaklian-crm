@@ -9316,19 +9316,13 @@ async function renderSettings() {
           <input id="brand-company-name" placeholder="company name" />
           <input id="brand-tagline-input" placeholder="tagline" />
           <input id="brand-logo-horizontal" placeholder="/assets/images/logo-oaklian-dark.png" />
-        </div>
-        <div class="row gap" style="margin-top:8px;">
-          <input id="brand-logo-horizontal-file" type="file" accept="image/png,image/jpeg" />
-          <button id="brand-logo-horizontal-upload" class="secondary" type="button">上传打印/PDF Logo</button>
-          <span class="muted">建议 960×240 PNG，透明背景，4:1</span>
+          <input id="brand-logo-horizontal-file" type="file" accept="image/png,image/jpeg" style="display:none;" />
+          <button id="brand-logo-horizontal-upload" class="secondary" type="button">上传</button>
         </div>
         <div class="row gap" style="margin-top:8px;">
           <input id="brand-logo-icon" placeholder="/assets/images/logo-oaklian-light.png" />
-        </div>
-        <div class="row gap" style="margin-top:8px;">
-          <input id="brand-logo-icon-file" type="file" accept="image/png,image/jpeg" />
-          <button id="brand-logo-icon-upload" class="secondary" type="button">上传侧边栏 Logo</button>
-          <span class="muted">建议 960×240 PNG，深色背景适用，系统会等比缩放</span>
+          <input id="brand-logo-icon-file" type="file" accept="image/png,image/jpeg" style="display:none;" />
+          <button id="brand-logo-icon-upload" class="secondary" type="button">上传</button>
         </div>
         <div class="row gap" style="margin-top:8px;">
           <input id="brand-primary-color" placeholder="#0B6B55" />
@@ -9354,8 +9348,10 @@ async function renderSettings() {
 
   q("#create-user-btn").addEventListener("click", createUser);
   q("#save-brand-btn").addEventListener("click", saveBrand);
-  q("#brand-logo-horizontal-upload")?.addEventListener("click", () => handleBrandLogoUpload("horizontal"));
-  q("#brand-logo-icon-upload")?.addEventListener("click", () => handleBrandLogoUpload("icon"));
+  q("#brand-logo-horizontal-upload")?.addEventListener("click", () => q("#brand-logo-horizontal-file")?.click());
+  q("#brand-logo-icon-upload")?.addEventListener("click", () => q("#brand-logo-icon-file")?.click());
+  q("#brand-logo-horizontal-file")?.addEventListener("change", () => handleBrandLogoUpload("horizontal"));
+  q("#brand-logo-icon-file")?.addEventListener("change", () => handleBrandLogoUpload("icon"));
   await renderUserTable();
 }
 
