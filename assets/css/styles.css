@@ -58,17 +58,46 @@ body {
   min-height: 0;
   overflow: hidden;
 }
-.sidebar h1 { margin: 0; font-size: 28px; line-height: 1.05; letter-spacing: 1px; }
-.brand-icon {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  display: block;
-  margin: 0 0 14px 4px;
-  border-radius: 2px;
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 70px;
+  margin: 0 0 6px;
 }
-#brand-subtitle { font-size: 17px; letter-spacing: 2px; font-weight: 600; color: #F1F5F9; }
-.brand-tagline { color: #CBD5E1; font-size: 11px; letter-spacing: 0.8px; margin: 6px 0 12px; }
+.brand-icon {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  display: block;
+  flex: 0 0 62px;
+  border-radius: 3px;
+}
+.brand-wordmark {
+  min-width: 0;
+}
+.sidebar h1 {
+  margin: 0;
+  font-size: 27px;
+  line-height: 0.96;
+  letter-spacing: 1px;
+  color: #fff;
+}
+#brand-subtitle {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 2.2px;
+  font-weight: 700;
+  color: #F1F5F9;
+}
+.brand-tagline {
+  color: #CBD5E1;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  line-height: 1.2;
+  margin: 0 0 14px;
+}
 
 .menu {
   display: grid;
