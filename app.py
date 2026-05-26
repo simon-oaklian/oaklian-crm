@@ -139,6 +139,8 @@ FILE_ENTITY_MODULE = {
 FILE_CATEGORY_SET = {"photo", "contract", "estimate", "invoice", "change_order", "completion", "other"}
 ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".pdf"}
 MAX_UPLOAD_FILE_SIZE = 20 * 1024 * 1024
+ALLOWED_BRAND_LOGO_EXTS = {".jpg", ".jpeg", ".png"}
+MAX_BRAND_LOGO_SIZE = 5 * 1024 * 1024
 
 RESOURCE_MODULE = {
     "customers": "customers",
@@ -4652,6 +4654,13 @@ class CRMHandler(BaseHTTPRequestHandler):
             if not user:
                 return
             return self._files_upload(user)
+        if path == "/api/company/logo-upload":
+            user = self._require_auth()
+            if not user:
+                return
+            if user.get("role") != "owner":
+                return self._json_response({"error": "Owner only"}, 403)
+            return self._company_logo_upload(user)
         if path == "/api/system-settings":
             user = self._require_auth()
             if not user:
@@ -5334,6 +5343,73 @@ class CRMHandler(BaseHTTPRequestHandler):
         row = cur.fetchone()
         conn.close()
         return self._json_response(self._serialize_file_row(row), 201)
+
+    def _company_logo_upload(self, user):
+        fields, files, error = self._read_multipart_form_data()
+        if error:
+            return self._json_response({"error": error}, 400)
+        slot = normalize_key(fields.get("slot") or "icon")
+        if slot not in {"icon", "horizontal"}:
+            return self._json_response({"error": "slot must be icon or horizontal"}, 400)
+        if "file" not in files:
+            return self._json_response({"error": "file is required"}, 400)
+
+        file_item = files["file"]
+        original_name = Path(file_item.get("filename") or "").name
+        ext = Path(original_name).suffix.lower()
+        if ext not in ALLOWED_BRAND_LOGO_EXTS:
+            return self._json_response({"error": "Only jpg/jpeg/png supported"}, 400)
+        file_bytes = file_item.get("content") or b""
+        file_size = len(file_bytes)
+        if file_size <= 0:
+            return self._json_response({"error": "empty file"}, 400)
+        if file_size > MAX_BRAND_LOGO_SIZE:
+            return self._json_response({"error": "file too large (max 5MB)"}, 400)
+
+        mime_type = (file_item.get("content_type") or mimetypes.guess_type(original_name)[0] or "application/octet-stream").lower()
+        if not mime_type.startswith("image/"):
+            mime_type = mimetypes.guess_type(f"file{ext}")[0] or "image/png"
+
+        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        stored_name = f"logo-{slot}-{ts}-{secrets.token_hex(4)}{ext}"
+        target_dir = (UPLOADS_DIR / "brand").resolve()
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = (target_dir / stored_name).resolve()
+        if not str(target_path).startswith(str(UPLOADS_DIR.resolve())):
+            return self._json_response({"error": "invalid upload path"}, 400)
+        target_path.write_bytes(file_bytes)
+        url = f"/uploads/brand/{stored_name}"
+
+        field = "logo_icon_url" if slot == "icon" else "logo_horizontal_url"
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"UPDATE company_settings SET {field}=?, updated_at=? WHERE id=1", (url, now_ts()))
+        if cur.rowcount == 0:
+            cur.execute(
+                """
+                INSERT INTO company_settings(
+                    id, company_name, legal_name, tagline, logo_horizontal_url, logo_icon_url,
+                    primary_color, accent_color, dark_color, light_bg, website_webhook_key, updated_at
+                ) VALUES (1,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    "Company",
+                    "",
+                    "",
+                    url if slot == "horizontal" else "/assets/images/logo-oaklian-dark.png",
+                    url if slot == "icon" else "/assets/images/logo-oaklian-light.png",
+                    "#1E293B",
+                    "#A38A55",
+                    "#0F172A",
+                    "#E2E8F0",
+                    WEBHOOK_KEY_ENV or "oaklian-webhook-key-change-me",
+                    now_ts(),
+                ),
+            )
+        conn.commit()
+        data = self._read_company_settings(cur)
+        conn.close()
+        return self._json_response({"ok": True, "slot": slot, "url": url, "mime_type": mime_type, "brand": data}, 201)
 
     def _files_delete(self, path, user):
         if user.get("role") == "designer":

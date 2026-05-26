@@ -3253,7 +3253,7 @@ function applyBrand() {
   if (q("#brand-name")) q("#brand-name").textContent = "OAKLIAN";
   if (q("#brand-subtitle")) q("#brand-subtitle").textContent = "REMODELING";
   if (q("#brand-tagline")) q("#brand-tagline").textContent = "REMODELING & CONSTRUCTION";
-  if (q("#brand-icon")) q("#brand-icon").src = "/assets/images/logo-oaklian-light.png";
+  if (q("#brand-icon")) q("#brand-icon").src = b.logo_icon_url || "/assets/images/logo-oaklian-light.png";
 }
 
 async function api(path, options = {}) {
@@ -3793,6 +3793,13 @@ async function uploadEntityFile(entityType, entityId, category, file) {
   fd.append("category", category || "other");
   fd.append("file", file);
   return api("/api/files/upload", { method: "POST", body: fd });
+}
+
+async function uploadBrandLogo(slot, file) {
+  const fd = new FormData();
+  fd.append("slot", slot);
+  fd.append("file", file);
+  return api("/api/company/logo-upload", { method: "POST", body: fd });
 }
 
 async function deleteEntityFile(fileId) {
@@ -9311,7 +9318,19 @@ async function renderSettings() {
           <input id="brand-logo-horizontal" placeholder="/assets/images/logo-oaklian-dark.png" />
         </div>
         <div class="row gap" style="margin-top:8px;">
+          <input id="brand-logo-horizontal-file" type="file" accept="image/png,image/jpeg" />
+          <button id="brand-logo-horizontal-upload" class="secondary" type="button">上传打印/PDF Logo</button>
+          <span class="muted">建议 960×240 PNG，透明背景，4:1</span>
+        </div>
+        <div class="row gap" style="margin-top:8px;">
           <input id="brand-logo-icon" placeholder="/assets/images/logo-oaklian-light.png" />
+        </div>
+        <div class="row gap" style="margin-top:8px;">
+          <input id="brand-logo-icon-file" type="file" accept="image/png,image/jpeg" />
+          <button id="brand-logo-icon-upload" class="secondary" type="button">上传侧边栏 Logo</button>
+          <span class="muted">建议 960×240 PNG，深色背景适用，系统会等比缩放</span>
+        </div>
+        <div class="row gap" style="margin-top:8px;">
           <input id="brand-primary-color" placeholder="#0B6B55" />
           <input id="brand-accent-color" placeholder="#C89B3C" />
           <input id="brand-webhook-key" placeholder="website webhook key" />
@@ -9335,6 +9354,8 @@ async function renderSettings() {
 
   q("#create-user-btn").addEventListener("click", createUser);
   q("#save-brand-btn").addEventListener("click", saveBrand);
+  q("#brand-logo-horizontal-upload")?.addEventListener("click", () => handleBrandLogoUpload("horizontal"));
+  q("#brand-logo-icon-upload")?.addEventListener("click", () => handleBrandLogoUpload("icon"));
   await renderUserTable();
 }
 
@@ -9416,6 +9437,27 @@ async function saveBrand() {
   state.brand = updated;
   applyBrand();
   renderApp();
+}
+
+async function handleBrandLogoUpload(slot) {
+  const inputId = slot === "horizontal" ? "#brand-logo-horizontal-file" : "#brand-logo-icon-file";
+  const targetId = slot === "horizontal" ? "#brand-logo-horizontal" : "#brand-logo-icon";
+  const input = q(inputId);
+  const file = input && input.files && input.files[0];
+  if (!file) {
+    alert("请先选择图片文件");
+    return;
+  }
+  if (!/\.(png|jpe?g)$/i.test(file.name)) {
+    alert("仅支持 PNG/JPG 图片");
+    return;
+  }
+  const result = await uploadBrandLogo(slot, file);
+  if (result && result.url && q(targetId)) q(targetId).value = result.url;
+  if (result && result.brand) state.brand = result.brand;
+  input.value = "";
+  applyBrand();
+  alert(t("upload_success"));
 }
 
 async function renderApp() {
