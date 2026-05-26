@@ -4413,7 +4413,6 @@ async function refreshOwnerDashboardSections(options = {}) {
           <div class="list-item">
             <div><b>${esc(d.file_name || "-")}</b></div>
             <div>${displayValue("doc_type", d.doc_type || "-")} · ${esc(dashboardTimestamp(d) || "-")}</div>
-            <div>${esc(d.tags || "-")}</div>
             <div class="action-group">
               ${d.url ? `<a href="${esc(d.url)}" target="_blank" class="btn-link">${t("open_file")}</a>` : ""}
             </div>
