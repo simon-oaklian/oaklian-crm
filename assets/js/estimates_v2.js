@@ -459,7 +459,9 @@
           <select class="ev2-input ev2-section-select" id="ev2-new-sec-master">
             <option value="">${tt("ev2_section_select_ph", "选择分区类型...")}</option>
             ${ev2.sectionsMaster.map(s => `<option value="${s.id}">${escHtml(s.name || s.name_zh)} · ${escHtml(s.code)}</option>`).join("")}
+            <option value="__custom__">${tt("ev2_section_custom_option", "其它 / 自定义")}</option>
           </select>
+          <input class="ev2-input" id="ev2-new-sec-custom-name" style="display:none; max-width:260px;" placeholder="${tt("ev2_section_custom_name_ph", "输入自定义分区名")}" />
           <button class="ev2-btn" id="ev2-add-section">${tt("ev2_btn_add_section", "+ 添加分区")}</button>
         </div>
 
@@ -668,6 +670,13 @@
     // 加载模板
     $("#ev2-tpl-load").addEventListener("click", onLoadTemplate);
     // 加分区
+    $("#ev2-new-sec-master").addEventListener("change", onNewSectionTypeChange);
+    $("#ev2-new-sec-custom-name").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onAddSection();
+      }
+    });
     $("#ev2-add-section").addEventListener("click", onAddSection);
     // 委派:分区/明细行的事件
     $("#ev2-sections").addEventListener("click", onSectionAreaClick);
@@ -763,14 +772,40 @@
 
   // ============================ 编辑器:分区操作 ============================
 
+  function onNewSectionTypeChange() {
+    const sel = $("#ev2-new-sec-master");
+    const input = $("#ev2-new-sec-custom-name");
+    if (!sel || !input) return;
+    const isCustom = sel.value === "__custom__";
+    input.style.display = isCustom ? "" : "none";
+    if (isCustom) input.focus();
+  }
+
   async function onAddSection() {
-    const masterId = Number($("#ev2-new-sec-master").value);
-    if (!masterId) { toast(tt("ev2_select_section_first", "请先选择分区类型"), "error"); return; }
+    const sectionValue = $("#ev2-new-sec-master").value;
+    const isCustom = sectionValue === "__custom__";
+    const customName = ($("#ev2-new-sec-custom-name")?.value || "").trim();
+    const masterId = isCustom ? 0 : Number(sectionValue);
+    if (isCustom && !customName) {
+      toast(tt("ev2_custom_section_name_required", "请输入自定义分区名"), "error");
+      $("#ev2-new-sec-custom-name")?.focus();
+      return;
+    }
+    if (!isCustom && !masterId) {
+      toast(tt("ev2_select_section_first", "请先选择分区类型"), "error");
+      return;
+    }
     const est = ev2.currentEstimate;
     try {
+      const body = isCustom ? { name: customName } : { master_id: masterId };
       await api(`estimates/${est.id}/sections`, {
-        method: "POST", body: { master_id: masterId },
+        method: "POST", body,
       });
+      if (isCustom) {
+        $("#ev2-new-sec-custom-name").value = "";
+        $("#ev2-new-sec-master").value = "";
+        onNewSectionTypeChange();
+      }
       await refreshFromServer();
     } catch (e) {
       toast(tt("ev2_add_failed_prefix", "添加失败: ") + e.message, "error");
