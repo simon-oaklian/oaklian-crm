@@ -829,18 +829,19 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
 
     # 计算列宽和列数
     # 固定列: 项目 + 描述 + 数量 + 单位 + 小计
-    # 可选列: 材料$ / 人工$
-    # 总列数: 5 + (1 if material) + (1 if labor)
-    cols_extra = (1 if show_material else 0) + (1 if show_labor else 0)
+    # 可选列: 材料$ / 人工$ / 合并单价
+    cols_extra = (1 if show_material else 0) + (1 if show_labor else 0) + (1 if show_unit_price else 0)
     total_cols = 5 + cols_extra
 
-    # 列宽分配(根据是否显示材料/人工调整)
-    if show_material and show_labor:
-        col_widths = ["30%", "24%", "8%", "8%", "10%", "10%", "12%"]  # 项目 描述 数量 单位 材料 人工 小计
-    elif show_material or show_labor:
-        col_widths = ["34%", "28%", "9%", "9%", "12%", "16%"]  # 项目 描述 数量 单位 材料/人工 小计
+    # 列宽分配(根据是否显示材料/人工/合并单价调整)
+    if show_unit_price and show_material and show_labor:
+        col_widths = ["25%", "22%", "7%", "7%", "10%", "10%", "9%", "10%"]
+    elif show_unit_price and (show_material or show_labor):
+        col_widths = ["29%", "25%", "8%", "8%", "12%", "8%", "10%"]
+    elif show_unit_price:
+        col_widths = ["34%", "29%", "8%", "8%", "10%", "11%"]
     else:
-        col_widths = ["38%", "32%", "10%", "8%", "14%"]  # 项目 描述 数量 单位 小计
+        col_widths = ["38%", "32%", "10%", "8%", "12%"]
 
     # 构造表头
     headers = []
@@ -854,6 +855,9 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
         col_idx += 1
     if show_labor:
         headers.append(f"<th class='num' style='width:{col_widths[col_idx]}'>{_L(lang, 'labor')}</th>")
+        col_idx += 1
+    if show_unit_price:
+        headers.append(f"<th class='num' style='width:{col_widths[col_idx]}'>{_L(lang, 'unit_price')}</th>")
         col_idx += 1
     headers.append(f"<th class='num' style='width:{col_widths[col_idx]}'>{_L(lang, 'line_subtotal')}</th>")
     header_html = f"<thead><tr>{''.join(headers)}</tr></thead>"
@@ -875,6 +879,7 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
             unit = _esc(ln.get("unit") or "")
             mat = float(ln.get("material_unit_price") or 0)
             lab = float(ln.get("labor_unit_price") or 0)
+            unit_price = mat + lab
             sub = float(ln.get("line_subtotal") or 0)
             qty_disp = f"{qty:g}"
 
@@ -888,6 +893,8 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
                 cells.append(f"<td class='num'>{_money(mat)}</td>")
             if show_labor:
                 cells.append(f"<td class='num'>{_money(lab)}</td>")
+            if show_unit_price:
+                cells.append(f"<td class='num'>{_money(unit_price)}</td>")
             cells.append(f"<td class='num'>{_money(sub)}</td>")
             parts.append("<tr>" + "".join(cells) + "</tr>")
 
