@@ -218,6 +218,7 @@ TABLE_FIELDS = {
         "valid_until",
         "subtotal",
         "markup_rate",
+        "manual_adjustment",
         "total_amount",
         "line_items_json",
     ],
@@ -773,6 +774,7 @@ def init_db():
             valid_until TEXT,
             subtotal REAL DEFAULT 0,
             markup_rate REAL DEFAULT 0,
+            manual_adjustment REAL DEFAULT 0,
             total_amount REAL DEFAULT 0,
             line_items_json TEXT,
             created_at TEXT NOT NULL,
@@ -1252,6 +1254,7 @@ def init_db():
             "confirmed_at": "TEXT",
             "confirmed_by": "INTEGER",
             "confirm_note": "TEXT",
+            "manual_adjustment": "REAL DEFAULT 0",
         },
     )
     ensure_columns(
@@ -8876,8 +8879,8 @@ class CRMHandler(BaseHTTPRequestHandler):
         cur.execute(
             """
             INSERT INTO estimates(
-                customer_id,lead_id,project_id,contract_id,title,address,version,status,confirm_status,valid_until,subtotal,markup_rate,total_amount,line_items_json,rounding_mode,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                customer_id,lead_id,project_id,contract_id,title,address,version,status,confirm_status,valid_until,subtotal,markup_rate,manual_adjustment,total_amount,line_items_json,rounding_mode,created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 customer_id,
@@ -8890,6 +8893,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "Draft",
                 "draft",
                 None,
+                0,
                 0,
                 0,
                 0,
@@ -11414,8 +11418,15 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
                     payload["confirmed_at"] = payload.get("confirmed_at") or existing.get("confirmed_at") or now_ts()
                     payload["confirmed_by"] = payload.get("confirmed_by") or existing.get("confirmed_by") or user.get("id")
 
+            if "manual_adjustment" in incoming_payload:
+                try:
+                    payload["manual_adjustment"] = round(float(incoming_payload.get("manual_adjustment") or 0), 2)
+                except (TypeError, ValueError):
+                    conn.close()
+                    return self._json_response({"error": "manual_adjustment must be number"}, 400)
+
             if current_confirm == "confirmed":
-                locked_fields = {"subtotal", "markup_rate", "total_amount", "line_items_json"}
+                locked_fields = {"subtotal", "markup_rate", "manual_adjustment", "total_amount", "line_items_json"}
                 touched_locked = [k for k in locked_fields if k in incoming_payload]
                 if touched_locked:
                     conn.close()

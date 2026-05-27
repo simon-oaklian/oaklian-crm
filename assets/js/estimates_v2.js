@@ -566,6 +566,7 @@
     const markupAmt = subtotal * markup / 100;
     const afterMarkup = subtotal + markupAmt;
     const taxAmt = taxEnabled ? afterMarkup * taxRate / 100 : 0;
+    const manualAdjustment = numberOrDefault(est.manual_adjustment, 0);
     const total = est.total_amount || 0;
     return `
       <div class="ev2-totals-row"><span>${tt("ev2_total_subtotal", "明细小计")}</span><span class="num" id="ev2-t-subtotal">${fmtMoney(subtotal)}</span></div>
@@ -579,6 +580,13 @@
       <div class="ev2-totals-row">
         <span><label><input type="checkbox" id="ev2-tax-toggle" ${taxEnabled ? "checked" : ""}/> ${tt("ev2_total_tax", "税")} (${taxRate}%)</label></span>
         <span class="num" id="ev2-t-tax">${taxEnabled ? fmtMoney(taxAmt) : "—"}</span>
+      </div>
+      <div class="ev2-totals-row">
+        <span>${tt("ev2_total_manual_adjustment", "人工调整")}</span>
+        <span class="ev2-row">
+          <input type="number" step="1" id="ev2-manual-adjustment" class="ev2-input ev2-input-num" value="${escHtml(manualAdjustment)}" />
+          <span class="num" id="ev2-t-manual-adjustment">${fmtMoney(manualAdjustment)}</span>
+        </span>
       </div>
       <div class="ev2-totals-row ev2-totals-grand"><span>${tt("ev2_total_grand", "总价(已凑整)")}</span><span class="num" id="ev2-t-grand">${fmtMoney(total)}</span></div>
     `;
@@ -693,6 +701,8 @@
     if (range) range.addEventListener("input", onMarkupInput);
     const taxToggle = $("#ev2-tax-toggle");
     if (taxToggle) taxToggle.addEventListener("change", onTaxToggle);
+    const manualAdjustment = $("#ev2-manual-adjustment");
+    if (manualAdjustment) manualAdjustment.addEventListener("input", onManualAdjustmentInput);
     // 付款进度
     $$('input[name="ev2-hb"]').forEach(r => r.addEventListener("change", onHoldbackChange));
     $("#ev2-pm-add").addEventListener("click", onAddMilestone);
@@ -936,11 +946,14 @@
     const markupAmt = subtotal * markup / 100;
     const afterMarkup = subtotal + markupAmt;
     const taxAmt = taxEnabled ? afterMarkup * taxRate / 100 : 0;
+    const manualAdjustmentInput = $("#ev2-manual-adjustment");
+    const manualAdjustment = manualAdjustmentInput ? Number(manualAdjustmentInput.value || 0) : numberOrDefault(est.manual_adjustment, 0);
     const total = est.total_amount || 0;
 
     $("#ev2-t-subtotal") && ($("#ev2-t-subtotal").textContent = fmtMoney(subtotal));
     $("#ev2-t-markup") && ($("#ev2-t-markup").textContent = `${markup}% · ${fmtMoney(markupAmt)}`);
     $("#ev2-t-tax") && ($("#ev2-t-tax").textContent = taxEnabled ? fmtMoney(taxAmt) : "—");
+    $("#ev2-t-manual-adjustment") && ($("#ev2-t-manual-adjustment").textContent = fmtMoney(manualAdjustment));
     $("#ev2-t-grand") && ($("#ev2-t-grand").textContent = fmtMoney(total));
     refreshPaymentTotals();
   }
@@ -980,6 +993,24 @@
         await refreshTotalsFromServer();
       } catch (err) { /* swallow */ }
     }, 200);
+  }
+
+  function onManualAdjustmentInput(e) {
+    const v = Number(e.target.value || 0);
+    $("#ev2-t-manual-adjustment").textContent = fmtMoney(v);
+    debounce("manual-adjustment", async () => {
+      const est = ev2.currentEstimate;
+      try {
+        await fetch(`/api/estimates/${est.id}`, {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ manual_adjustment: v }),
+        });
+        await api(`estimates/${est.id}/recalc`, { method: "POST" });
+        await refreshTotalsFromServer();
+      } catch (err) { /* swallow */ }
+    }, 500);
   }
 
   async function refreshTotalsFromServer() {

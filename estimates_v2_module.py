@@ -1487,7 +1487,7 @@ def _recalc_estimate_totals(cur, eid):
     line_total = cur.fetchone()[0] or 0
     # 2. 重建主体 + 附加项
     cur.execute(
-        "SELECT estimate_type, rebuild_unit_price, rebuild_total_sqft, markup_rate, tax_enabled, tax_rate, rounding_mode FROM estimates WHERE id=?",
+        "SELECT estimate_type, rebuild_unit_price, rebuild_total_sqft, markup_rate, tax_enabled, tax_rate, rounding_mode, manual_adjustment FROM estimates WHERE id=?",
         (eid,),
     )
     r = cur.fetchone()
@@ -1514,9 +1514,11 @@ def _recalc_estimate_totals(cur, eid):
     tax_rate = r[5] or 0
     tax_amount = after_markup * tax_rate / 100.0 if tax_enabled else 0
     after_tax = after_markup + tax_amount
+    manual_adjustment = r[7] or 0
+    adjusted_total = after_tax + manual_adjustment
     # 凑整
     rounding = r[6] or "10"
-    total_amount = _round_total(after_tax, rounding)
+    total_amount = _round_total(adjusted_total, rounding)
     cur.execute(
         "UPDATE estimates SET subtotal=?, total_amount=?, updated_at=? WHERE id=?",
         (subtotal, total_amount, _now(), eid),
