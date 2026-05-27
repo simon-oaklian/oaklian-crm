@@ -1515,7 +1515,7 @@ def _recalc_estimate_totals(cur, eid):
     tax_amount = after_markup * tax_rate / 100.0 if tax_enabled else 0
     after_tax = after_markup + tax_amount
     # 凑整
-    rounding = r[6] or "100"
+    rounding = r[6] or "10"
     total_amount = _round_total(after_tax, rounding)
     cur.execute(
         "UPDATE estimates SET subtotal=?, total_amount=?, updated_at=? WHERE id=?",
@@ -1530,7 +1530,7 @@ def _round_total(amount, mode):
     try:
         unit = int(mode)
     except (ValueError, TypeError):
-        unit = 100
+        unit = 10
     if unit <= 0:
         return round(amount, 2)
     # 四舍五入到最近的 unit
