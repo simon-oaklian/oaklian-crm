@@ -8876,8 +8876,8 @@ class CRMHandler(BaseHTTPRequestHandler):
         cur.execute(
             """
             INSERT INTO estimates(
-                customer_id,lead_id,project_id,contract_id,title,address,version,status,confirm_status,valid_until,subtotal,markup_rate,total_amount,line_items_json,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                customer_id,lead_id,project_id,contract_id,title,address,version,status,confirm_status,valid_until,subtotal,markup_rate,total_amount,line_items_json,rounding_mode,created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 customer_id,
@@ -8894,6 +8894,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 0,
                 0,
                 "[]",
+                "10",
                 ts,
                 ts,
             ),
