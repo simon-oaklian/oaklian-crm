@@ -68,6 +68,12 @@
     return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
   }
 
+  function numberOrDefault(value, fallback) {
+    if (value === null || value === undefined || value === "") return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function debounce(key, fn, wait) {
     if (ev2.debounceTimers[key]) clearTimeout(ev2.debounceTimers[key]);
     ev2.debounceTimers[key] = setTimeout(fn, wait || 400);
@@ -399,11 +405,11 @@
   // -------- 翻新报价编辑器 --------
   function renderRenovationEditor(container, est) {
     const settings = ev2.settings || {};
-    const markupMin = Number(settings.estimate_markup_min || 10);
-    const markupMax = Number(settings.estimate_markup_max || 25);
+    const markupMin = numberOrDefault(settings.estimate_markup_min, 0);
+    const markupMax = numberOrDefault(settings.estimate_markup_max, 25);
     const taxEnabled = Number(est.tax_enabled || 0);
     const taxRate = Number(est.tax_rate || settings.estimate_tax_rate || 9.25);
-    const markup = Number(est.markup_rate || settings.estimate_markup_default || 15);
+    const markup = numberOrDefault(est.markup_rate, numberOrDefault(settings.estimate_markup_default, 0));
     const tplOptions = ev2.templatesForLoad
       .map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join("");
 
@@ -918,10 +924,10 @@
     const est = ev2.currentEstimate;
     if (!est) return;
     const settings = ev2.settings || {};
-    const markupMin = Number(settings.estimate_markup_min || 10);
-    const markupMax = Number(settings.estimate_markup_max || 25);
+    const markupMin = numberOrDefault(settings.estimate_markup_min, 0);
+    const markupMax = numberOrDefault(settings.estimate_markup_max, 25);
     const range = $("#ev2-markup-range");
-    const markup = range ? Number(range.value) : Number(est.markup_rate || 15);
+    const markup = range ? Number(range.value) : numberOrDefault(est.markup_rate, numberOrDefault(settings.estimate_markup_default, 0));
     const tax = $("#ev2-tax-toggle");
     const taxEnabled = tax ? (tax.checked ? 1 : 0) : Number(est.tax_enabled || 0);
     const taxRate = Number(est.tax_rate || settings.estimate_tax_rate || 9.25);

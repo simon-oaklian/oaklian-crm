@@ -1041,7 +1041,7 @@ def _handle_template_create(handler, get_conn, user):
             body.get("template_type") if body.get("template_type") in ("full", "section") else "full",
             body.get("estimate_type") if body.get("estimate_type") in ("renovation", "rebuild") else "renovation",
             _safe_str(body.get("description"), 500),
-            _parse_float(body.get("default_markup_rate"), 15),
+            _parse_float(body.get("default_markup_rate"), 0),
             _now(), _now(), user.get("id"),
         ),
     )
@@ -1062,7 +1062,7 @@ def _handle_template_update(handler, get_conn, user, tid):
     if "description" in body:
         fields.append("description=?"); params.append(_safe_str(body["description"], 500))
     if "default_markup_rate" in body:
-        fields.append("default_markup_rate=?"); params.append(_parse_float(body["default_markup_rate"], 15))
+        fields.append("default_markup_rate=?"); params.append(_parse_float(body["default_markup_rate"], 0))
     if "template_type" in body and body["template_type"] in ("full", "section"):
         fields.append("template_type=?"); params.append(body["template_type"])
     if "estimate_type" in body and body["estimate_type"] in ("renovation", "rebuild"):
