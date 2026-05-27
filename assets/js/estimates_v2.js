@@ -594,7 +594,7 @@
 
   function renderPaymentScheduleHtml(est) {
     const ms = est.payment_milestones || [];
-    const stageOpts = ev2.stageItems.map(s => `<option value="${s.id}">${escHtml(s.step_name)}</option>`).join("");
+    const stageOpts = renderStageOptions();
     const total = est.total_amount || 0;
     const sumPct = ms.reduce((s, m) => s + (Number(m.amount_pct) || 0), 0);
     const okPct = Math.abs(sumPct - 100) < 0.5;
@@ -639,10 +639,25 @@
     `;
   }
 
+  function renderStageOptions() {
+    const groups = new Map();
+    (ev2.stageItems || []).forEach(s => {
+      const label = s.template_name || "阶段模板";
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(s);
+    });
+    return Array.from(groups.entries()).map(([label, items]) => {
+      const opts = items.map(s => `<option value="${s.id}">${escHtml(s.step_name || "")}</option>`).join("");
+      return `<optgroup label="${escHtml(label)}">${opts}</optgroup>`;
+    }).join("");
+  }
+
   function renderPaymentRow(m, idx, stageOpts, total) {
     const amt = total * (Number(m.amount_pct) || 0) / 100;
     const isHb = m.is_holdback ? "ev2-hb-row" : "";
     const lock = m.is_holdback ? "disabled" : "";
+    const isCustomStage = !!String(m.custom_stage_name || "").trim();
+    const customStyle = isCustomStage ? "" : "display:none;";
     return `
       <tr class="ev2-pm-row ${isHb}" data-idx="${idx}">
         <td class="col-no">${m.is_holdback ? "★" : (idx + 1)}</td>
@@ -650,8 +665,10 @@
         <td>
           <select class="ev2-input" data-field="trigger_stage_template_item_id" ${lock}>
             <option value="">${tt("ev2_pm_select_stage", "— 选择施工阶段 —")}</option>
+            <option value="__custom__">${tt("ev2_pm_custom_stage", "+ 自定义阶段")}</option>
             ${stageOpts}
           </select>
+          <input class="ev2-input" data-field="custom_stage_name" value="${escHtml(m.custom_stage_name || "")}" placeholder="${tt("ev2_pm_custom_stage_placeholder", "输入自定义阶段")}" style="margin-top:6px;${customStyle}" ${lock}/>
         </td>
         <td><input class="ev2-input ev2-input-num" data-field="amount_pct" value="${m.amount_pct || 0}" ${lock}/></td>
         <td class="num">${fmtMoney(amt)}</td>
@@ -726,8 +743,15 @@
       const m = ms[idx];
       if (!m) return;
       const sel = row.querySelector('[data-field="trigger_stage_template_item_id"]');
-      if (sel && m.trigger_stage_template_item_id) {
+      const customInput = row.querySelector('[data-field="custom_stage_name"]');
+      const customName = String(m.custom_stage_name || "").trim();
+      if (sel && customName) {
+        sel.value = "__custom__";
+      } else if (sel && m.trigger_stage_template_item_id) {
         sel.value = String(m.trigger_stage_template_item_id);
+      }
+      if (customInput) {
+        customInput.style.display = customName ? "" : "none";
       }
     });
   }
@@ -1104,7 +1128,7 @@
     const ms = est.payment_milestones || [];
     // 在 holdback 之前插
     const hbIdx = ms.findIndex(m => m.is_holdback);
-    const newM = { name: "新节点", amount_pct: 0, trigger_type: "stage", is_holdback: 0 };
+    const newM = { name: "新节点", amount_pct: 0, trigger_type: "stage", trigger_stage_template_item_id: null, custom_stage_name: "", is_holdback: 0 };
     if (hbIdx >= 0) ms.splice(hbIdx, 0, newM);
     else ms.push(newM);
     est.payment_milestones = ms;
@@ -1134,7 +1158,30 @@
       const f = input.dataset.field;
       let v = input.value;
       if (f === "amount_pct") v = Number(v) || 0;
-      if (f === "trigger_stage_template_item_id") v = v ? Number(v) : null;
+      if (f === "trigger_stage_template_item_id") {
+        const customInput = row.querySelector('[data-field="custom_stage_name"]');
+        if (v === "__custom__") {
+          ms[idx].trigger_stage_template_item_id = null;
+          ms[idx].custom_stage_name = customInput ? customInput.value : (ms[idx].custom_stage_name || "");
+          if (customInput) customInput.style.display = "";
+          refreshPaymentTotals();
+          return;
+        }
+        if (customInput) {
+          customInput.value = "";
+          customInput.style.display = "none";
+        }
+        ms[idx].custom_stage_name = "";
+        v = v ? Number(v) : null;
+      }
+      if (f === "custom_stage_name") {
+        ms[idx].custom_stage_name = v;
+        ms[idx].trigger_stage_template_item_id = null;
+        const sel = row.querySelector('[data-field="trigger_stage_template_item_id"]');
+        if (sel) sel.value = "__custom__";
+        refreshPaymentTotals();
+        return;
+      }
       ms[idx][f] = v;
       refreshPaymentTotals();
     }

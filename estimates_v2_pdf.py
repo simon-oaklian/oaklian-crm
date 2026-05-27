@@ -1017,7 +1017,7 @@ def _render_payment(est, lang, show_pct):
         amt = total * pct / 100
         marker = "★" if is_hb else str(idx + 1)
         row_cls = "holdback" if is_hb else ""
-        stage_name = _esc(m.get("stage_step_name") or "")
+        stage_name = _esc(m.get("custom_stage_name") or m.get("stage_step_name") or "")
         name = _esc(m.get("name") or "")
         if show_pct:
             parts.append(f"""

@@ -1593,13 +1593,17 @@ def _handle_payment_milestones_replace(handler, get_conn, eid):
         return True
     cur.execute("DELETE FROM estimate_payment_milestones WHERE estimate_id=?", (eid,))
     for idx, m in enumerate(items):
+        custom_stage_name = _safe_str(m.get("custom_stage_name"), 100).strip()
+        stage_item_id = _parse_int(m.get("trigger_stage_template_item_id")) or None
+        if custom_stage_name:
+            stage_item_id = None
         cur.execute(
             """
             INSERT INTO estimate_payment_milestones
-            (estimate_id, name, sort_order, trigger_type, trigger_stage_template_item_id,
+            (estimate_id, name, sort_order, trigger_type, trigger_stage_template_item_id, custom_stage_name,
              trigger_days_after_completion, amount_pct, amount_fixed, is_holdback, note,
              created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 eid,
@@ -1608,7 +1612,8 @@ def _handle_payment_milestones_replace(handler, get_conn, eid):
                 m.get("trigger_type") if m.get("trigger_type") in (
                     "signing", "stage", "completion_immediate", "completion_delayed"
                 ) else "stage",
-                _parse_int(m.get("trigger_stage_template_item_id")) or None,
+                stage_item_id,
+                custom_stage_name,
                 _parse_int(m.get("trigger_days_after_completion"), 0),
                 _parse_float(m.get("amount_pct"), 0),
                 _parse_float(m.get("amount_fixed")) if m.get("amount_fixed") not in (None, "") else None,

@@ -1257,6 +1257,7 @@ def init_db():
             "manual_adjustment": "REAL DEFAULT 0",
         },
     )
+    ensure_columns(cur, "estimate_payment_milestones", {"custom_stage_name": "TEXT"})
     ensure_columns(
         cur,
         "contracts",
@@ -3386,6 +3387,39 @@ class CRMHandler(BaseHTTPRequestHandler):
         items = self._get_stage_template_items(cur, template_id)
         active_items = [it for it in items if int(it.get("is_active") or 0) == 1]
         names = [str(it.get("step_name") or "").strip() for it in active_items if str(it.get("step_name") or "").strip()]
+        return names
+
+    def _estimate_custom_payment_stage_names(self, cur, estimate_id):
+        if not estimate_id:
+            return []
+        cur.execute(
+            """
+            SELECT custom_stage_name
+            FROM estimate_payment_milestones
+            WHERE estimate_id=?
+            ORDER BY sort_order ASC,id ASC
+            """,
+            (estimate_id,),
+        )
+        names = []
+        seen = set()
+        for row in cur.fetchall():
+            name = str(row["custom_stage_name"] or "").strip()
+            key = name.lower()
+            if name and key not in seen:
+                seen.add(key)
+                names.append(name)
+        return names
+
+    def _append_unique_stage_names(self, stage_names, extra_names):
+        names = list(stage_names or [])
+        seen = {str(name or "").strip().lower() for name in names if str(name or "").strip()}
+        for name in extra_names or []:
+            clean = str(name or "").strip()
+            key = clean.lower()
+            if clean and key not in seen:
+                names.append(clean)
+                seen.add(key)
         return names
 
     def _sync_stage_template_stages_json(self, cur, template_id):
@@ -9331,7 +9365,7 @@ class CRMHandler(BaseHTTPRequestHandler):
 
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("SELECT id,project_type,stage_template_id FROM projects WHERE id=?", (project_id,))
+        cur.execute("SELECT id,project_type,stage_template_id,estimate_id FROM projects WHERE id=?", (project_id,))
         raw_project = cur.fetchone()
         if not raw_project:
             conn.close()
@@ -9363,6 +9397,10 @@ class CRMHandler(BaseHTTPRequestHandler):
         if not stage_names:
             selected_template_id = self._resolve_default_stage_template_id(cur, project_row.get("project_type"))
             stage_names = self._stage_template_stage_names(cur, selected_template_id) if selected_template_id else list(DEFAULT_PROJECT_STAGES)
+        stage_names = self._append_unique_stage_names(
+            stage_names,
+            self._estimate_custom_payment_stage_names(cur, project_row.get("estimate_id")),
+        )
 
         if selected_template_id:
             cur.execute(
@@ -11910,7 +11948,7 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
         cur.execute("SELECT COUNT(1) c FROM project_stages WHERE project_id=?", (project_id,))
         if (cur.fetchone() or {"c": 0})["c"] > 0:
             return
-        cur.execute("SELECT project_type,stage_template_id FROM projects WHERE id=?", (project_id,))
+        cur.execute("SELECT project_type,stage_template_id,estimate_id FROM projects WHERE id=?", (project_id,))
         prow = cur.fetchone()
         p = row_to_dict(prow) if prow else None
         stage_template_id = None
@@ -11926,6 +11964,11 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
         stage_names = self._stage_template_stage_names(cur, stage_template_id) if stage_template_id else []
         if not stage_names:
             stage_names = list(DEFAULT_PROJECT_STAGES)
+        if p:
+            stage_names = self._append_unique_stage_names(
+                stage_names,
+                self._estimate_custom_payment_stage_names(cur, p.get("estimate_id")),
+            )
         self._replace_project_stages(cur, project_id, stage_names)
 
     def _apply_change_order(self, cur, change_order_id):
