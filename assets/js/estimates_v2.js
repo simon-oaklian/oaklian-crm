@@ -97,8 +97,7 @@
     }
     if (status === "sent") {
       buttons.push(`<button class="ev2-btn" id="ev2-copy-public-link">${tt("ev2_btn_quote_link", "客户链接")}</button>`);
-      buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-mark-confirmed">${tt("ev2_btn_customer_confirm", "客户确认")}</button>`);
-      buttons.push(`<button class="ev2-btn ev2-btn-danger" id="ev2-mark-rejected">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>`);
+      buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-mark-confirmed">${tt("ev2_btn_manual_confirm", "手动确认")}</button>`);
     }
     if (status === "confirmed" && !est.linked_contract_id) {
       buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-generate-contract" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同草稿")}</button>`);
@@ -359,8 +358,7 @@
       const noCustomer = !Number(r.customer_id || 0);
       const flowButtons = [
         status === "draft" || status === "sent" ? `<button class="ev2-btn-mini" data-act="send-customer" data-id="${r.id}">${status === "sent" ? tt("ev2_btn_quote_link", "客户链接") : tt("ev2_btn_send_to_customer", "发送给客户")}</button>` : "",
-        status === "sent" ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="mark-confirmed" data-id="${r.id}">${tt("ev2_btn_customer_confirm", "客户确认")}</button>` : "",
-        status === "sent" ? `<button class="ev2-btn-mini ev2-btn-danger" data-act="mark-rejected" data-id="${r.id}">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>` : "",
+        status === "sent" ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="mark-confirmed" data-id="${r.id}">${tt("ev2_btn_manual_confirm", "手动确认")}</button>` : "",
         status === "confirmed" && !r.linked_contract_id
           ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="gen-contract" data-id="${r.id}" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同草稿")}</button>`
           : "",
@@ -396,7 +394,6 @@
         else if (btn.dataset.act === "delete") onDeleteQuote(id);
         else if (btn.dataset.act === "send-customer") sendEstimateToCustomer(id);
         else if (btn.dataset.act === "mark-confirmed") markEstimateStatus(id, "confirmed");
-        else if (btn.dataset.act === "mark-rejected") markEstimateStatus(id, "rejected");
         else if (btn.dataset.act === "gen-contract") generateContractFromEstimate(id);
         else if (btn.dataset.act === "view-contract") openLinkedContract(btn.dataset.contractId);
       });
@@ -474,7 +471,6 @@
       else sendEstimateToCustomer(est.id, true);
     });
     $("#ev2-mark-confirmed")?.addEventListener("click", () => markEstimateStatusFromEditor("confirmed"));
-    $("#ev2-mark-rejected")?.addEventListener("click", () => markEstimateStatusFromEditor("rejected"));
     $("#ev2-generate-contract")?.addEventListener("click", () => generateContractFromEstimate(est.id));
     $("#ev2-view-contract")?.addEventListener("click", () => openLinkedContract(est.linked_contract_id));
   }

@@ -10181,21 +10181,21 @@ class CRMHandler(BaseHTTPRequestHandler):
         labels = {
             "zh": {
                 "title": "报价确认", "estimate": "估价单", "customer": "客户信息", "details": "报价明细",
-                "summary": "总价", "payment": "付款节点", "confirm": "确认报价", "reject": "拒绝报价",
+                "summary": "总价", "payment": "付款节点", "confirm": "确认报价",
                 "name": "姓名", "email": "邮箱", "phone": "电话", "note": "备注", "download": "打开/下载 PDF",
                 "confirm_text": "我确认已阅读并同意此报价内容。正式合同将另行发送签署。",
                 "subtotal": "明细小计", "total": "总计", "status": "状态", "already": "该报价已处理。",
             },
             "en": {
                 "title": "Quote Confirmation", "estimate": "Estimate", "customer": "Customer Info", "details": "Estimate Details",
-                "summary": "Total", "payment": "Payment Milestones", "confirm": "Confirm Quote", "reject": "Reject Quote",
+                "summary": "Total", "payment": "Payment Milestones", "confirm": "Confirm Quote",
                 "name": "Name", "email": "Email", "phone": "Phone", "note": "Note", "download": "Open / Download PDF",
                 "confirm_text": "I have reviewed and agree to this quote. The formal contract will be sent separately for signature.",
                 "subtotal": "Items Subtotal", "total": "Grand Total", "status": "Status", "already": "This quote has already been processed.",
             },
             "es": {
                 "title": "Confirmacion de cotizacion", "estimate": "Cotizacion", "customer": "Cliente", "details": "Detalle",
-                "summary": "Total", "payment": "Hitos de pago", "confirm": "Confirmar cotizacion", "reject": "Rechazar cotizacion",
+                "summary": "Total", "payment": "Hitos de pago", "confirm": "Confirmar cotizacion",
                 "name": "Nombre", "email": "Correo", "phone": "Telefono", "note": "Nota", "download": "Abrir / Descargar PDF",
                 "confirm_text": "He revisado y acepto esta cotizacion. El contrato formal se enviara por separado para firma.",
                 "subtotal": "Subtotal", "total": "Total", "status": "Estado", "already": "Esta cotizacion ya fue procesada.",
@@ -10246,7 +10246,6 @@ class CRMHandler(BaseHTTPRequestHandler):
             <label class="check"><input type="checkbox" name="agree" required /> {labels['confirm_text']}</label>
             <div class="actions">
               <button type="button" id="confirm-btn">{labels['confirm']}</button>
-              <button type="button" id="reject-btn" class="secondary">{labels['reject']}</button>
             </div>
           </form>
         """
@@ -10300,7 +10299,6 @@ async function send(action) {{
   location.reload();
 }}
 document.getElementById('confirm-btn')?.addEventListener('click', () => send('confirm'));
-document.getElementById('reject-btn')?.addEventListener('click', () => send('reject'));
 </script></body></html>"""
         return self._html_response(html)
 

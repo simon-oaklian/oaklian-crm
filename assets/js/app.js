@@ -4019,8 +4019,7 @@ async function bindDashboardFollowupActions(rootSelector, onUpdated = null) {
 
 function dashboardEstimateConfirmActions(item = {}) {
   return `
-    <button data-est-act="confirm" data-id="${item.id}">${t("customer_confirm")}</button>
-    <button data-est-act="reject" data-id="${item.id}" class="danger">${t("customer_reject")}</button>
+    <button data-est-act="confirm" data-id="${item.id}">手动确认</button>
     <button data-est-act="open-estimate" data-id="${item.id}" class="secondary">${t("view_estimate")}</button>
   `;
 }
@@ -4035,12 +4034,6 @@ async function bindDashboardEstimateConfirmActions(rootSelector, onUpdated = nul
       if (!estimateId) return;
       if (act === "confirm") {
         await api(`/api/estimates/${estimateId}/mark-confirmed`, { method: "POST" });
-        if (onUpdated) await onUpdated();
-        else await renderDashboard();
-        return;
-      }
-      if (act === "reject") {
-        await api(`/api/estimates/${estimateId}/mark-rejected`, { method: "POST" });
         if (onUpdated) await onUpdated();
         else await renderDashboard();
         return;
@@ -6085,7 +6078,7 @@ function renderTable(module, rows, progressMap = {}) {
         ${module === "projects" ? `<button data-act="detail" data-id="${r.id}">${t("detail")}</button>` : ""}
         ${module === "estimates"
           ? `${normalizeEnum(r.confirm_status || "draft") === "draft" ? `<button data-act="mark-estimate-sent" data-id="${r.id}" class="secondary">${t("mark_sent")}</button>` : ""}
-             ${normalizeEnum(r.confirm_status || "draft") === "sent" ? `<button data-act="mark-estimate-confirmed" data-id="${r.id}">${t("customer_confirm")}</button><button data-act="mark-estimate-rejected" data-id="${r.id}" class="danger">${t("customer_reject")}</button>` : ""}
+             ${normalizeEnum(r.confirm_status || "draft") === "sent" ? `<button data-act="mark-estimate-confirmed" data-id="${r.id}">手动确认</button>` : ""}
              ${normalizeEnum(r.confirm_status || "draft") === "confirmed" ? `<span class="inline-badge">${t("can_generate_contract_hint")}</span>` : ""}
              ${r.linked_contract_id
             ? `<button data-act="view-contract" data-id="${r.id}" data-contract-id="${r.linked_contract_id}" class="secondary">${t("view_contract")}</button>`
@@ -7598,7 +7591,7 @@ async function renderRecordLinkPanel(module, row = null) {
           <div>${fieldLabel("status")}：${displayValue("status", row.status || "-")}</div>
           <div class="row gap" style="margin-top:6px;">
             ${normalizeEnum(row.confirm_status || "draft") === "draft" ? `<button data-rel-act="estimate-mark-sent" data-estimate-id="${row.id}" class="secondary">${t("mark_sent")}</button>` : ""}
-            ${normalizeEnum(row.confirm_status || "draft") === "sent" ? `<button data-rel-act="estimate-mark-confirmed" data-estimate-id="${row.id}">${t("customer_confirm")}</button><button data-rel-act="estimate-mark-rejected" data-estimate-id="${row.id}" class="danger">${t("customer_reject")}</button>` : ""}
+            ${normalizeEnum(row.confirm_status || "draft") === "sent" ? `<button data-rel-act="estimate-mark-confirmed" data-estimate-id="${row.id}">手动确认</button>` : ""}
             ${normalizeEnum(row.confirm_status || "draft") === "confirmed" ? `<span class="inline-badge">${t("can_generate_contract_hint")}</span>` : ""}
           </div>
         </div>
