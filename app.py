@@ -10136,6 +10136,14 @@ class CRMHandler(BaseHTTPRequestHandler):
             },
         }[lang]
 
+        conn = get_conn()
+        cur = conn.cursor()
+        print_settings = self._print_settings(cur)
+        conn.close()
+        logo_url = (print_settings.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
+        company_name = (print_settings.get("company_name") or "Oaklian Builders").strip()
+        footer_text = (print_settings.get("company_footer_text") or "OAKLIAN Remodeling & Construction LLC").strip()
+
         def money(v):
             return "$" + format(float(v or 0), ",.2f")
         def esc(v):
@@ -10145,13 +10153,14 @@ class CRMHandler(BaseHTTPRequestHandler):
             lines = sec.get("lines") or []
             line_rows = "".join(
                 f"<tr><td>{esc(x.get('item_name'))}</td><td>{esc(x.get('description'))}</td>"
-                f"<td class='num'>{esc(x.get('quantity'))}</td><td>{esc(x.get('unit'))}</td>"
+                f"<td class='num'>{esc(x.get('quantity'))}</td><td class='center'>{esc(x.get('unit'))}</td>"
                 f"<td class='num'>{money(x.get('line_subtotal'))}</td></tr>"
                 for x in lines
             )
             rows_html.append(
                 f"<section class='block'><h3>{esc(sec.get('name_zh') or sec.get('name') or '-')}</h3>"
-                f"<table><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit</th><th>Subtotal</th></tr></thead>"
+                f"<table class='quote-table'><colgroup><col class='col-item'><col class='col-desc'><col class='col-qty'><col class='col-unit'><col class='col-subtotal'></colgroup>"
+                f"<thead><tr><th>Item</th><th>Description</th><th class='num'>Qty</th><th class='center'>Unit</th><th class='num'>Subtotal</th></tr></thead>"
                 f"<tbody>{line_rows}</tbody></table></section>"
             )
         ms_html = "".join(
@@ -10180,18 +10189,25 @@ class CRMHandler(BaseHTTPRequestHandler):
 body{{margin:0;background:#e8ebf0;color:#1d2433;font-family:Arial,'Microsoft YaHei',sans-serif}}
 .page{{width:min(900px,calc(100vw - 28px));margin:24px auto;background:#fff;padding:36px;box-shadow:0 2px 12px rgba(0,0,0,.18)}}
 .top{{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #777;padding-bottom:16px}}
+.brand{{display:flex;align-items:center;gap:14px;min-width:0}}
+.logo{{width:112px;height:56px;object-fit:contain;object-position:left center;flex:0 0 auto}}
+.brand-text{{min-width:0}}
 h1{{margin:0;font-size:24px}} h2{{font-size:17px;border-left:4px solid #777;padding-left:10px;margin-top:24px}} h3{{font-size:15px;margin:18px 0 8px}}
 .muted{{color:#667085}} .grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px 40px}}
-table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{border-bottom:1px solid #ddd;padding:8px;text-align:left}} th{{background:#f3f5f8}} .num{{text-align:right}}
+table{{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}} th,td{{border-bottom:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}} th{{background:#f3f5f8}} .num{{text-align:right}} .center{{text-align:center}}
+.quote-table .col-item{{width:26%}} .quote-table .col-desc{{width:34%}} .quote-table .col-qty{{width:12%}} .quote-table .col-unit{{width:10%}} .quote-table .col-subtotal{{width:18%}}
+.quote-table td:nth-child(3),.quote-table th:nth-child(3),.quote-table td:nth-child(5),.quote-table th:nth-child(5){{text-align:right}}
+.quote-table td:nth-child(4),.quote-table th:nth-child(4){{text-align:center}}
 .total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:24px;padding:18px;border:1px solid #d8dee8;background:#fbfcfe}}
 label{{display:block;margin-top:10px;font-weight:600}} input,textarea{{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd7e3;border-radius:4px;margin-top:4px;font:inherit}} textarea{{min-height:80px}}
 .check{{display:flex;gap:8px;align-items:flex-start;font-weight:400}} .check input{{width:auto;margin-top:3px}}
 .actions{{display:flex;gap:10px;margin-top:16px}} button{{padding:11px 18px;border:1px solid #1f2937;background:#1f2937;color:#fff;border-radius:4px;font-weight:700;cursor:pointer}} button.secondary{{background:#fff;color:#1f2937}}
 .notice{{margin-top:20px;padding:14px;background:#eef7ee;border:1px solid #b8d8b8}}
 @media print{{body{{background:#fff}}.page{{box-shadow:none;margin:0;width:auto}}.confirm-box,.download{{display:none}}}}
+@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}}}
 </style></head>
 <body><main class="page">
-<div class="top"><div><h1>Oaklian Builders</h1><div class="muted">OAKLIAN Remodeling & Construction LLC</div></div>
+<div class="top"><div class="brand"><img class="logo" src="{esc(logo_url)}" alt="Oaklian logo"><div class="brand-text"><h1>{esc(company_name)}</h1><div class="muted">{esc(footer_text)}</div></div></div>
 <div><h1>{labels['title']}</h1><div>{labels['estimate']} #{int(estimate['id']):05d}</div><div>{esc(estimate.get('updated_at'))}</div></div></div>
 <h2>{labels['customer']}</h2><div class="grid"><div><b>Name:</b> {esc(estimate.get('customer_name'))}</div><div><b>Phone:</b> {esc(estimate.get('customer_phone'))}</div>
 <div><b>Address:</b> {esc(estimate.get('address') or estimate.get('customer_address'))}</div><div><b>Project:</b> {esc(estimate.get('title'))}</div></div>
