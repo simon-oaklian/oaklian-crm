@@ -196,6 +196,18 @@
   margin-right: 4px;
 }
 
+.ev2-btn:disabled,
+.ev2-btn-mini:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ev2-btn-warn {
+  color: var(--ev2-warn);
+  border-color: rgba(184, 150, 90, 0.55);
+  background: rgba(184, 150, 90, 0.08);
+}
+
 .ev2-btn-mini.ev2-btn-danger,
 .ev2-btn-danger {
   color: var(--ev2-danger);
@@ -265,6 +277,14 @@
 
 .ev2-mini { font-size: 11px; color: var(--ev2-text-faint); }
 
+.ev2-actions-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 260px;
+}
+
 .ev2-status {
   display: inline-block;
   padding: 2px 8px;
@@ -308,6 +328,14 @@
 }
 
 .ev2-editor-actions { display: flex; gap: 8px; }
+
+.ev2-flow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0 14px;
+}
 
 /* 分区卡片 */
 .ev2-section-card { padding: 12px 14px; }

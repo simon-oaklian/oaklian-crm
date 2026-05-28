@@ -68,6 +68,48 @@
     return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
   }
 
+  function statusLabel(status) {
+    const key = String(status || "draft").toLowerCase();
+    const labels = {
+      draft: tt("ev2_status_draft", "草稿"),
+      sent: tt("ev2_status_sent", "已发送"),
+      confirmed: tt("ev2_status_confirmed", "已确认"),
+      rejected: tt("ev2_status_rejected", "已拒绝"),
+    };
+    return labels[key] || key;
+  }
+
+  function canGenerateContract(row) {
+    return String(row.confirm_status || "draft").toLowerCase() === "confirmed"
+      && !row.linked_contract_id
+      && Number(row.customer_id || 0) > 0;
+  }
+
+  function flowButtonsHtml(est) {
+    const status = String(est.confirm_status || "draft").toLowerCase();
+    const noCustomer = !Number(est.customer_id || (est.customer && est.customer.id) || 0);
+    const linkedMismatch = Number(est.linked_contract_mismatch || 0) === 1;
+    const buttons = [];
+    buttons.push(`<span class="ev2-status ev2-status-${escHtml(status)}">${escHtml(statusLabel(status))}</span>`);
+    if (status === "draft") {
+      buttons.push(`<button class="ev2-btn" id="ev2-mark-sent">${tt("ev2_btn_mark_sent", "标记已发送")}</button>`);
+    }
+    if (status === "sent") {
+      buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-mark-confirmed">${tt("ev2_btn_customer_confirm", "客户确认")}</button>`);
+      buttons.push(`<button class="ev2-btn ev2-btn-danger" id="ev2-mark-rejected">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>`);
+    }
+    if (status === "confirmed" && !est.linked_contract_id) {
+      buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-generate-contract" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同")}</button>`);
+    }
+    if (est.linked_contract_id) {
+      buttons.push(`<button class="ev2-btn ${linkedMismatch ? "ev2-btn-warn" : ""}" id="ev2-view-contract">${linkedMismatch ? tt("ev2_btn_contract_mismatch", "关联异常") : tt("ev2_btn_view_contract", "查看合同")}</button>`);
+    }
+    if (noCustomer && status === "confirmed" && !est.linked_contract_id) {
+      buttons.push(`<span class="ev2-mini">${tt("ev2_need_customer_for_contract", "需要先关联客户才能生成合同")}</span>`);
+    }
+    return `<div class="ev2-flow-bar">${buttons.join("")}</div>`;
+  }
+
   function numberOrDefault(value, fallback) {
     if (value === null || value === undefined || value === "") return fallback;
     const n = Number(value);
@@ -309,30 +351,123 @@
       return;
     }
     $("#ev2-quote-empty").style.display = "none";
-    tbody.innerHTML = list.map(r => `
+    tbody.innerHTML = list.map(r => {
+      const status = String(r.confirm_status || "draft").toLowerCase();
+      const linkedMismatch = Number(r.linked_contract_mismatch || 0) === 1;
+      const noCustomer = !Number(r.customer_id || 0);
+      const flowButtons = [
+        status === "draft" ? `<button class="ev2-btn-mini" data-act="mark-sent" data-id="${r.id}">${tt("ev2_btn_mark_sent", "标记已发送")}</button>` : "",
+        status === "sent" ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="mark-confirmed" data-id="${r.id}">${tt("ev2_btn_customer_confirm", "客户确认")}</button>` : "",
+        status === "sent" ? `<button class="ev2-btn-mini ev2-btn-danger" data-act="mark-rejected" data-id="${r.id}">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>` : "",
+        status === "confirmed" && !r.linked_contract_id
+          ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="gen-contract" data-id="${r.id}" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同")}</button>`
+          : "",
+        r.linked_contract_id
+          ? `<button class="ev2-btn-mini ${linkedMismatch ? "ev2-btn-warn" : ""}" data-act="view-contract" data-id="${r.id}" data-contract-id="${r.linked_contract_id}">${linkedMismatch ? tt("ev2_btn_contract_mismatch", "关联异常") : tt("ev2_btn_view_contract", "查看合同")}</button>`
+          : "",
+      ].filter(Boolean).join("");
+      return `
       <tr>
         <td>#${r.id}</td>
         <td>${escHtml(r.title || "-")}</td>
         <td>${r.estimate_type === "rebuild" ? tt("ev2_type_rebuild", "重建") : tt("ev2_type_renovation", "翻新")}</td>
         <td>${escHtml(r.customer_name || "-")}</td>
-        <td><span class="ev2-status ev2-status-${escHtml(r.confirm_status || "draft")}">${escHtml(r.confirm_status || "draft")}</span></td>
+        <td><span class="ev2-status ev2-status-${escHtml(status)}">${escHtml(statusLabel(status))}</span></td>
         <td class="num">${fmtMoney(r.total_amount || 0)}</td>
         <td class="ev2-mini">${escHtml(r.updated_at || "").slice(0, 16)}</td>
         <td>
-          <button class="ev2-btn-mini" data-act="edit" data-id="${r.id}">${tt("ev2_btn_edit", "编辑")}</button>
-          <button class="ev2-btn-mini" data-act="pdf" data-id="${r.id}">PDF</button>
-          <button class="ev2-btn-mini ev2-btn-danger" data-act="delete" data-id="${r.id}">${tt("ev2_btn_delete", "删除")}</button>
+          <div class="ev2-actions-wrap">
+            <button class="ev2-btn-mini" data-act="edit" data-id="${r.id}">${tt("ev2_btn_edit", "编辑")}</button>
+            <button class="ev2-btn-mini" data-act="pdf" data-id="${r.id}">PDF</button>
+            ${flowButtons}
+            <button class="ev2-btn-mini ev2-btn-danger" data-act="delete" data-id="${r.id}">${tt("ev2_btn_delete", "删除")}</button>
+          </div>
         </td>
       </tr>
-    `).join("");
+    `;
+    }).join("");
     tbody.querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = Number(btn.dataset.id);
         if (btn.dataset.act === "edit") openEstimateEditor(id);
         else if (btn.dataset.act === "pdf") openPdfDialog(id);
         else if (btn.dataset.act === "delete") onDeleteQuote(id);
+        else if (btn.dataset.act === "mark-sent") markEstimateStatus(id, "sent");
+        else if (btn.dataset.act === "mark-confirmed") markEstimateStatus(id, "confirmed");
+        else if (btn.dataset.act === "mark-rejected") markEstimateStatus(id, "rejected");
+        else if (btn.dataset.act === "gen-contract") generateContractFromEstimate(id);
+        else if (btn.dataset.act === "view-contract") openLinkedContract(btn.dataset.contractId);
       });
     });
+  }
+
+  async function markEstimateStatus(id, target) {
+    const endpoint = {
+      sent: "mark-sent",
+      confirmed: "mark-confirmed",
+      rejected: "mark-rejected",
+    }[target];
+    if (!endpoint) return;
+    try {
+      await api(`/api/estimates/${id}/${endpoint}`, { method: "POST" });
+      toast(tt("ev2_flow_saved", "状态已更新"), "success");
+      await renderQuotesTab($("#ev2-tab-content"));
+    } catch (e) {
+      toast(tt("ev2_flow_failed_prefix", "流程操作失败: ") + e.message, "error");
+    }
+  }
+
+  async function generateContractFromEstimate(id) {
+    if (!confirm2(tt("ev2_confirm_generate_contract", "确认用这个已确认报价生成合同?生成后合同将作为正式版本继续流转。"))) return;
+    try {
+      const res = await api(`/api/estimates/${id}/generate-contract`, { method: "POST" });
+      toast(tt("ev2_contract_generated", "合同已生成"), "success");
+      if (res && res.contract && res.contract.id) {
+        openLinkedContract(res.contract.id);
+      } else {
+        await renderQuotesTab($("#ev2-tab-content"));
+      }
+    } catch (e) {
+      toast(tt("ev2_contract_generate_failed_prefix", "生成合同失败: ") + e.message, "error");
+    }
+  }
+
+  async function openLinkedContract(contractId) {
+    const id = Number(contractId || 0);
+    if (!id) return;
+    if (typeof window.openContractDetail === "function") {
+      await window.openContractDetail(id);
+      return;
+    }
+    toast(tt("ev2_contract_open_hint", "合同已生成,请到合同/付款计划查看。"), "success");
+  }
+
+  function bindFlowButtons() {
+    const est = ev2.currentEstimate;
+    if (!est) return;
+    $("#ev2-mark-sent")?.addEventListener("click", () => markEstimateStatusFromEditor("sent"));
+    $("#ev2-mark-confirmed")?.addEventListener("click", () => markEstimateStatusFromEditor("confirmed"));
+    $("#ev2-mark-rejected")?.addEventListener("click", () => markEstimateStatusFromEditor("rejected"));
+    $("#ev2-generate-contract")?.addEventListener("click", () => generateContractFromEstimate(est.id));
+    $("#ev2-view-contract")?.addEventListener("click", () => openLinkedContract(est.linked_contract_id));
+  }
+
+  async function markEstimateStatusFromEditor(target) {
+    const est = ev2.currentEstimate;
+    if (!est) return;
+    const endpoint = {
+      sent: "mark-sent",
+      confirmed: "mark-confirmed",
+      rejected: "mark-rejected",
+    }[target];
+    if (!endpoint) return;
+    try {
+      await api(`/api/estimates/${est.id}/${endpoint}`, { method: "POST" });
+      toast(tt("ev2_flow_saved", "状态已更新"), "success");
+      await openEstimateEditor(est.id);
+    } catch (e) {
+      toast(tt("ev2_flow_failed_prefix", "流程操作失败: ") + e.message, "error");
+    }
   }
 
   async function onCreateQuote() {
@@ -423,6 +558,7 @@
             <button class="ev2-btn ev2-btn-primary" id="ev2-export-pdf">${tt("ev2_btn_export_pdf", "导出 PDF")}</button>
           </div>
         </div>
+        ${flowButtonsHtml(est)}
 
         <!-- 顶部:客户/项目/类型/模板 -->
         <div class="ev2-card">
@@ -690,6 +826,7 @@
     // 导出 PDF
     const pdfBtn = $("#ev2-export-pdf");
     if (pdfBtn) pdfBtn.addEventListener("click", () => openPdfDialog(ev2.currentEstimate.id));
+    bindFlowButtons();
     // 类型切换
     $("#ev2-est-type").addEventListener("change", async (e) => {
       const est = ev2.currentEstimate;
@@ -1282,6 +1419,7 @@
       </div>
     `;
     $("#ev2-back").addEventListener("click", () => switchTab("quotes"));
+    bindFlowButtons();
     $("#ev2-back-to-reno").addEventListener("click", async () => {
       await fetch(`/api/estimates/${est.id}`, {
         method: "PUT",

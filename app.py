@@ -3812,7 +3812,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 ph = ",".join(["?"] * len(estimate_ids))
                 cur.execute(
                     f"""
-                    SELECT id,estimate_id,contract_no,project_id,title,address,total_amount
+                    SELECT id,estimate_id,contract_no,project_id,customer_id,title,address,total_amount
                     FROM contracts
                     WHERE estimate_id IN ({ph})
                     ORDER BY id ASC
@@ -3839,11 +3839,12 @@ class CRMHandler(BaseHTTPRequestHandler):
                     r["confirmed_at"] = r.get("updated_at") or r.get("created_at")
                 linked = link_map.get(r.get("id"))
                 if not linked and r.get("contract_id"):
-                    cur.execute("SELECT id,contract_no,total_amount,title,address FROM contracts WHERE id=?", (r.get("contract_id"),))
+                    cur.execute("SELECT id,contract_no,customer_id,total_amount,title,address FROM contracts WHERE id=?", (r.get("contract_id"),))
                     c = cur.fetchone()
                     linked = row_to_dict(c) if c else None
                 r["linked_contract_id"] = linked["id"] if linked else None
                 r["linked_contract_no"] = linked["contract_no"] if linked else None
+                r["linked_contract_customer_id"] = linked["customer_id"] if linked else None
                 r["linked_contract_total_amount"] = linked["total_amount"] if linked else None
                 r["linked_contract_title"] = linked["title"] if linked else None
                 r["linked_contract_address"] = linked["address"] if linked else None
@@ -3853,6 +3854,10 @@ class CRMHandler(BaseHTTPRequestHandler):
                 r["customer_name"] = (customer or {}).get("name")
                 r["customer_phone"] = (customer or {}).get("phone")
                 r["customer_address"] = r.get("address") or ((customer or {}).get("primary_address"))
+                if linked and linked.get("customer_id") not in (None, "") and r.get("customer_id") not in (None, ""):
+                    r["linked_contract_mismatch"] = int(linked.get("customer_id")) != int(r.get("customer_id"))
+                else:
+                    r["linked_contract_mismatch"] = False
                 source_type = "lead" if normalize_key((customer or {}).get("status") or "") in {
                     "lead",
                     "measuring",
@@ -4355,6 +4360,13 @@ class CRMHandler(BaseHTTPRequestHandler):
         if not estimate:
             conn.close()
             return self._json_response({"error": "Estimate not found"}, 404)
+        if not estimate["customer_id"]:
+            conn.close()
+            return self._json_response({"error": "Estimate must be linked to a customer before generating a contract"}, 400)
+        confirm_status = self._estimate_confirm_status_key(estimate["confirm_status"] or estimate["status"])
+        if confirm_status != "confirmed":
+            conn.close()
+            return self._json_response({"error": "Estimate must be confirmed before generating a contract"}, 400)
         if user.get("role") == "designer" and estimate["project_id"] and self._forbid_if_no_project_access(cur, user, estimate["project_id"]):
             conn.close()
             return
@@ -4420,6 +4432,7 @@ class CRMHandler(BaseHTTPRequestHandler):
             ),
         )
         contract_id = cur.lastrowid
+        self._copy_estimate_payment_milestones_to_contract(cur, estimate_id, contract_id)
         cur.execute("UPDATE estimates SET contract_id=?, updated_at=? WHERE id=?", (contract_id, ts, estimate_id))
         if project_id:
             cur.execute(
@@ -4436,6 +4449,67 @@ class CRMHandler(BaseHTTPRequestHandler):
         self._enrich_resource_rows(cur, "contracts", [row])
         conn.close()
         return self._json_response({"created": True, "contract": row}, 201)
+
+    def _copy_estimate_payment_milestones_to_contract(self, cur, estimate_id, contract_id):
+        cur.execute("SELECT COUNT(1) c FROM contract_payment_milestones WHERE contract_id=?", (contract_id,))
+        if (cur.fetchone() or {"c": 0})["c"]:
+            return
+        cur.execute(
+            """
+            SELECT epm.*, psti.step_name AS stage_step_name
+            FROM estimate_payment_milestones epm
+            LEFT JOIN project_stage_template_items psti ON psti.id=epm.trigger_stage_template_item_id
+            WHERE epm.estimate_id=?
+            ORDER BY epm.sort_order, epm.id
+            """,
+            (estimate_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return
+        ts = now_ts()
+        for idx, m in enumerate(rows, start=1):
+            amount_pct = float(m["amount_pct"] or 0)
+            if amount_pct <= 0:
+                continue
+            stage_name = (m["custom_stage_name"] or m["stage_step_name"] or "").strip()
+            is_holdback = int(m["is_holdback"] or 0) == 1
+            trigger_type = "progress_percent" if is_holdback else ("stage_done" if stage_name else "contract_signed")
+            trigger_progress = 100 if is_holdback else None
+            name = (m["name"] or "").strip() or ("Holdback" if is_holdback else f"Payment {idx}")
+            note_parts = []
+            if stage_name:
+                note_parts.append(f"From estimate stage: {stage_name}")
+            if is_holdback:
+                note_parts.append("Holdback copied from estimate payment schedule")
+            note = " | ".join(note_parts)
+            cur.execute(
+                """
+                INSERT INTO contract_payment_milestones(
+                    contract_id,name,node_type,trigger_type,trigger_stage,trigger_progress,amount_type,amount_value,
+                    triggered,triggered_at,reminded,reminded_at,paid,paid_at,note,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    contract_id,
+                    name,
+                    "holdback" if is_holdback else "payment",
+                    trigger_type,
+                    stage_name or None,
+                    trigger_progress,
+                    "percent",
+                    amount_pct,
+                    0,
+                    None,
+                    0,
+                    None,
+                    0,
+                    None,
+                    note,
+                    ts,
+                    ts,
+                ),
+            )
 
     def _contract_generate_project(self, path, user):
         if user.get("role") == "designer":
