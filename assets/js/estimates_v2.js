@@ -420,6 +420,7 @@
           <div class="ev2-editor-title">${tt("ev2_editor_title", "编辑报价 #{id}").replace("{id}", est.id)}</div>
           <div class="ev2-editor-actions">
             <button class="ev2-btn" id="ev2-save-meta">${tt("ev2_btn_save_meta", "保存基本信息")}</button>
+            <button class="ev2-btn" id="ev2-export-payment-pdf">${tt("ev2_btn_export_payment_pdf", "付款计划 PDF")}</button>
             <button class="ev2-btn ev2-btn-primary" id="ev2-export-pdf">${tt("ev2_btn_export_pdf", "导出 PDF")}</button>
           </div>
         </div>
@@ -690,6 +691,8 @@
     // 导出 PDF
     const pdfBtn = $("#ev2-export-pdf");
     if (pdfBtn) pdfBtn.addEventListener("click", () => openPdfDialog(ev2.currentEstimate.id));
+    const paymentPdfBtn = $("#ev2-export-payment-pdf");
+    if (paymentPdfBtn) paymentPdfBtn.addEventListener("click", () => openPaymentPdfDialog(ev2.currentEstimate.id));
     // 类型切换
     $("#ev2-est-type").addEventListener("change", async (e) => {
       const est = ev2.currentEstimate;
@@ -770,6 +773,20 @@
       }
     }
     const url = `/api/v2/estimates/${estimateId}/pdf?lang=${lang}`  /* P2F2_PATCH_APPLIED: removed auto_print so user reviews before printing */;
+    window.open(url, "_blank");
+  }
+
+  function openPaymentPdfDialog(estimateId) {
+    if (!estimateId) return;
+    let lang = "en";
+    const sel = document.getElementById("ev2-pdf-lang");
+    if (sel && sel.value) {
+      const v = String(sel.value).toLowerCase();
+      if (v === "zh" || v === "en") {
+        lang = v;
+      }
+    }
+    const url = `/api/v2/estimates/${estimateId}/payment-pdf?lang=${lang}`;
     window.open(url, "_blank");
   }
 

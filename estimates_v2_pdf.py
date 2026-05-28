@@ -43,7 +43,9 @@ def _pct(n, decimals=1):
 _LABELS = {
     "zh": {
         "title": "估价单",
+        "payment_title": "付款计划",
         "estimate_no": "报价号",
+        "linked_estimate": "关联报价",
         "date": "日期",
         "valid_until": "有效期至",
         "customer_info": "客户信息",
@@ -78,6 +80,13 @@ _LABELS = {
         "stage": "施工阶段",
         "amount_pct": "百分比",
         "amount": "金额",
+        "payment_total": "付款计划合计",
+        "holdback_note": "留款说明",
+        "payment_terms": [
+            "付款节点按双方确认的施工阶段执行。",
+            "如项目范围或金额发生变更,付款计划可随变更单调整。",
+            "未到达对应阶段前,该节点款项不视为到期。",
+        ],
         "holdback_marker": "★ 完工后留款",
         "remarks": "备注 / 说明",
         "default_remarks": [
@@ -92,7 +101,9 @@ _LABELS = {
     },
     "en": {
         "title": "Estimate / Quote",
+        "payment_title": "Payment Schedule",
         "estimate_no": "Estimate #",
+        "linked_estimate": "Related Estimate",
         "date": "Date",
         "valid_until": "Valid until",
         "customer_info": "Customer Info",
@@ -127,6 +138,13 @@ _LABELS = {
         "stage": "Construction Stage",
         "amount_pct": "Percentage",
         "amount": "Amount",
+        "payment_total": "Payment Schedule Total",
+        "holdback_note": "Holdback Note",
+        "payment_terms": [
+            "Payments are due according to the agreed construction milestones.",
+            "If project scope or contract amount changes, this payment schedule may be adjusted by change order.",
+            "A milestone payment is not due before the related stage is reached.",
+        ],
         "holdback_marker": "★ Holdback (post-completion)",
         "remarks": "Notes & Terms",
         "default_remarks": [
@@ -568,6 +586,17 @@ def _build_css(brand):
     background: rgba(184, 150, 90, 0.08);
     font-weight: 500;
   }}
+  table.pay-tbl tr.subtotal-row td {{
+    background: {light_bg};
+    font-weight: 600;
+    border-top: 1px solid #ccc;
+    border-bottom: none;
+  }}
+  .payment-note {{
+    margin-top: 8px;
+    font-size: 10px;
+    color: #555;
+  }}
 
   /* 备注 */
   .remarks ul {{
@@ -718,6 +747,10 @@ def _build_css(brand):
       background: #f5f5f5 !important;
       color: #000 !important;
     }}
+    table.pay-tbl tr.subtotal-row td {{
+      background: #f5f5f5 !important;
+      color: #000 !important;
+    }}
     /* P2F3_PATCH_APPLIED: force item name + desc to plain black/gray on print */
     .item-name {{
       color: #000 !important;
@@ -855,6 +888,36 @@ def _render_head(est, lang):
           <div><b>{_L(lang, 'estimate_no')}:</b>{_esc(est_no)}</div>
           <div><b>{_L(lang, 'date')}:</b>{_esc(today)}</div>
           <div><b>{_L(lang, 'valid_until')}:</b>{_esc(valid_until)}</div>
+        </div>
+      </div>
+    </div>
+    """
+
+
+def _render_payment_head(est, lang):
+    co = est.get("_company") or {}
+    company_name = co.get("company_name") or "Oaklian Builders"
+    legal_name = co.get("legal_name") or ""
+    tagline = co.get("tagline") or ""
+    logo_url = co.get("logo_horizontal_url") or "/assets/images/logo-oaklian-dark.png"
+
+    est_no = f"#{est['id']:05d}"
+    today = datetime.date.today().isoformat()
+
+    return f"""
+    <div class="pdf-head payment-doc-head">
+      <div class="left">
+        <img class="logo" src="{_esc(logo_url)}" onerror="this.style.display='none'" />
+        <div class="company-name">{_esc(company_name)}</div>
+        {f'<div class="tagline">{_esc(legal_name)}</div>' if legal_name else ''}
+        {f'<div class="tagline">{_esc(tagline)}</div>' if tagline else ''}
+      </div>
+      <div class="right">
+        <h1>{_L(lang, 'payment_title')}</h1>
+        <div class="meta">
+          <div><b>{_L(lang, 'linked_estimate')}:</b>{_esc(est_no)}</div>
+          <div><b>{_L(lang, 'date')}:</b>{_esc(today)}</div>
+          <div><b>{_L(lang, 'grand_total')}:</b>{_money(est.get('total_amount') or 0)}</div>
         </div>
       </div>
     </div>
@@ -1142,6 +1205,76 @@ def _render_payment(est, lang, show_pct):
     return "\n".join(parts)
 
 
+def _render_payment_schedule_document(est, lang):
+    ms = est.get("payment_milestones") or []
+    total = float(est.get("total_amount") or 0)
+    parts = [
+        '<div class="payment-block">',
+        f"<h2 class='section-title'>{_L(lang, 'payment_title')}</h2>",
+        "<div class='section-body'>",
+    ]
+    if not ms:
+        parts.append(f"<i style='color:#888'>— {_L(lang, 'payment')} —</i>")
+    else:
+        parts.append("<table class='pay-tbl'>")
+        parts.append(f"""
+          <thead><tr>
+            <th style='width:5%'>#</th>
+            <th style='width:30%'>{_L(lang, 'milestone')}</th>
+            <th style='width:30%'>{_L(lang, 'stage')}</th>
+            <th class='num' style='width:12%'>{_L(lang, 'amount_pct')}</th>
+            <th class='num' style='width:18%'>{_L(lang, 'amount')}</th>
+          </tr></thead>
+          <tbody>
+        """)
+        sum_pct = 0.0
+        holdback_rows = []
+        for idx, m in enumerate(ms):
+            is_hb = bool(m.get("is_holdback"))
+            pct = float(m.get("amount_pct") or 0)
+            amt = total * pct / 100
+            sum_pct += pct
+            if is_hb:
+                holdback_rows.append(m)
+            marker = "★" if is_hb else str(idx + 1)
+            row_cls = "holdback" if is_hb else ""
+            stage_name = _esc(m.get("custom_stage_name") or m.get("stage_step_name") or "")
+            name = _esc(m.get("name") or "")
+            parts.append(f"""
+            <tr class='{row_cls}'>
+              <td>{marker}</td>
+              <td>{name}</td>
+              <td>{stage_name}</td>
+              <td class='num'>{pct:.1f}%</td>
+              <td class='num'>{_money(amt)}</td>
+            </tr>
+            """)
+        parts.append(f"""
+          <tr class='subtotal-row'>
+            <td colspan='3' style='text-align:right'>{_L(lang, 'payment_total')}</td>
+            <td class='num'>{sum_pct:.1f}%</td>
+            <td class='num'>{_money(total * sum_pct / 100)}</td>
+          </tr>
+        """)
+        parts.append("</tbody></table>")
+        if holdback_rows:
+            parts.append(f"<div class='payment-note'><b>{_L(lang, 'holdback_note')}:</b> {_L(lang, 'holdback_marker')}</div>")
+    parts.append("</div></div>")
+    return "\n".join(parts)
+
+
+def _render_payment_terms(est, lang):
+    terms = _LABELS.get(lang, _LABELS["en"]).get("payment_terms") or []
+    return f"""
+    <div class="remarks-block pdf-block">
+      <h2 class='section-title'>{_L(lang, 'remarks')}</h2>
+      <div class='section-body remarks'>
+        <ul>{''.join(f'<li>{_esc(r)}</li>' for r in terms)}</ul>
+      </div>
+    </div>
+    """
+
+
 def _render_remarks(est, lang):
     remarks = _LABELS.get(lang if lang != "both" else "zh", _LABELS["zh"])["default_remarks"]
     if lang == "both":
@@ -1262,6 +1395,73 @@ def generate_estimate_pdf_html(get_conn, estimate_id, lang="zh", auto_print=True
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="{('zh-CN' if lang in ('zh','both') else 'en')}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{_esc(title)}</title>
+  {css}
+</head>
+<body>
+  {toolbar}
+  <div class="pdf-wrap">
+    {body_inner}
+  </div>
+  {auto_print_js}
+</body>
+</html>
+"""
+    return html_doc
+
+
+def generate_payment_schedule_pdf_html(get_conn, estimate_id, lang="zh", auto_print=True, mode="pdf"):
+    """
+    生成独立付款计划 PDF/打印 HTML。不改变报价 PDF 和付款数据。
+    """
+    if lang not in ("zh", "en"):
+        lang = "en"
+    est = _load_estimate_full(get_conn, estimate_id)
+    if not est:
+        return None
+
+    brand = est.get("_company") or {}
+    css = _build_css(brand)
+    body_parts = [
+        _render_running_header(est, lang),
+        _render_payment_head(est, lang),
+        _render_customer(est, lang),
+        _render_payment_schedule_document(est, lang),
+        _render_payment_terms(est, lang),
+        _render_footer(est, lang),
+        _render_running_footer(est, lang),
+    ]
+    body_inner = "\n".join(body_parts)
+
+    auto_print_js = ""
+    if auto_print:
+        auto_print_js = """
+        <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              window.print();
+            }, 600);
+          });
+        </script>
+        """
+
+    toolbar = """
+      <div class="toolbar" tabindex="0">
+        <span class="toolbar-handle">⋯</span>
+        <div class="toolbar-body">
+          <span style="font-size:11px">Oaklian Payment PDF</span>
+          <button onclick="window.print()">打印 / 保存为 PDF</button>
+          <button onclick="window.close()">关闭</button>
+        </div>
+      </div>
+    """
+
+    title = _L(lang, "payment_title") + f" #{est['id']:05d}"
+    html_doc = f"""<!DOCTYPE html>
+<html lang="{('zh-CN' if lang == 'zh' else 'en')}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />

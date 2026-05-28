@@ -239,6 +239,9 @@ def handle_get(handler, get_conn):
              or re.match(r"^/api/estimates/(\d+)/pdf$", path))
     if m_pdf:
         return _handle_pdf_export(handler, get_conn, int(m_pdf.group(1)), qs)
+    m_payment_pdf = re.match(r"^/api/v2/estimates/(\d+)/payment-pdf$", path)
+    if m_payment_pdf:
+        return _handle_payment_pdf_export(handler, get_conn, int(m_payment_pdf.group(1)), qs)
 
     if not path.startswith("/api/v2/"):
         return False
@@ -1974,6 +1977,43 @@ def _handle_pdf_export(handler, get_conn, estimate_id, qs):
         return True
 
     # 直接发 HTML
+    payload = html_doc.encode("utf-8")
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(payload)))
+    handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+    handler.end_headers()
+    handler.wfile.write(payload)
+    return True
+
+
+def _handle_payment_pdf_export(handler, get_conn, estimate_id, qs):
+    """处理 GET /api/v2/estimates/{id}/payment-pdf,返回独立付款计划 HTML。"""
+    user = handler._require_auth()
+    if not user:
+        return True
+    if not handler._require_module(user, "estimates"):
+        return True
+
+    query = _parse_query_string(qs)
+    lang = query.get("lang", "en")
+    if lang not in ("zh", "en"):
+        lang = "en"
+    auto_print_q = query.get("auto_print", "0")
+    auto_print = auto_print_q not in ("0", "false", "no")
+
+    try:
+        html_doc = ev2pdf.generate_payment_schedule_pdf_html(
+            get_conn, estimate_id, lang=lang, auto_print=auto_print, mode="pdf",
+        )
+    except Exception as e:
+        handler._json_response({"error": f"Payment PDF 生成失败: {e}"}, 500)
+        return True
+
+    if html_doc is None:
+        handler._json_response({"error": "Estimate not found"}, 404)
+        return True
+
     payload = html_doc.encode("utf-8")
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
