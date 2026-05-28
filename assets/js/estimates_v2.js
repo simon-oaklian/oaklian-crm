@@ -92,14 +92,15 @@
     const buttons = [];
     buttons.push(`<span class="ev2-status ev2-status-${escHtml(status)}">${escHtml(statusLabel(status))}</span>`);
     if (status === "draft") {
-      buttons.push(`<button class="ev2-btn" id="ev2-mark-sent">${tt("ev2_btn_mark_sent", "标记已发送")}</button>`);
+      buttons.push(`<button class="ev2-btn" id="ev2-mark-sent">${tt("ev2_btn_send_to_customer", "发送给客户")}</button>`);
+      buttons.push(`<span class="ev2-mini">${tt("ev2_send_customer_hint", "当前版本将进入已发送状态；客户确认网页和邮箱/短信发送稍后接入。")}</span>`);
     }
     if (status === "sent") {
       buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-mark-confirmed">${tt("ev2_btn_customer_confirm", "客户确认")}</button>`);
       buttons.push(`<button class="ev2-btn ev2-btn-danger" id="ev2-mark-rejected">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>`);
     }
     if (status === "confirmed" && !est.linked_contract_id) {
-      buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-generate-contract" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同")}</button>`);
+      buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-generate-contract" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同草稿")}</button>`);
     }
     if (est.linked_contract_id) {
       buttons.push(`<button class="ev2-btn ${linkedMismatch ? "ev2-btn-warn" : ""}" id="ev2-view-contract">${linkedMismatch ? tt("ev2_btn_contract_mismatch", "关联异常") : tt("ev2_btn_view_contract", "查看合同")}</button>`);
@@ -356,11 +357,11 @@
       const linkedMismatch = Number(r.linked_contract_mismatch || 0) === 1;
       const noCustomer = !Number(r.customer_id || 0);
       const flowButtons = [
-        status === "draft" ? `<button class="ev2-btn-mini" data-act="mark-sent" data-id="${r.id}">${tt("ev2_btn_mark_sent", "标记已发送")}</button>` : "",
+        status === "draft" ? `<button class="ev2-btn-mini" data-act="mark-sent" data-id="${r.id}">${tt("ev2_btn_send_to_customer", "发送给客户")}</button>` : "",
         status === "sent" ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="mark-confirmed" data-id="${r.id}">${tt("ev2_btn_customer_confirm", "客户确认")}</button>` : "",
         status === "sent" ? `<button class="ev2-btn-mini ev2-btn-danger" data-act="mark-rejected" data-id="${r.id}">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>` : "",
         status === "confirmed" && !r.linked_contract_id
-          ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="gen-contract" data-id="${r.id}" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同")}</button>`
+          ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="gen-contract" data-id="${r.id}" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同草稿")}</button>`
           : "",
         r.linked_contract_id
           ? `<button class="ev2-btn-mini ${linkedMismatch ? "ev2-btn-warn" : ""}" data-act="view-contract" data-id="${r.id}" data-contract-id="${r.linked_contract_id}">${linkedMismatch ? tt("ev2_btn_contract_mismatch", "关联异常") : tt("ev2_btn_view_contract", "查看合同")}</button>`
@@ -418,7 +419,7 @@
   }
 
   async function generateContractFromEstimate(id) {
-    if (!confirm2(tt("ev2_confirm_generate_contract", "确认用这个已确认报价生成合同?生成后合同将作为正式版本继续流转。"))) return;
+    if (!confirm2(tt("ev2_confirm_generate_contract", "确认用这个已确认报价生成合同草稿?合同草稿检查后再发送客户签署。"))) return;
     try {
       const res = await api(`/api/estimates/${id}/generate-contract`, { method: "POST" });
       toast(tt("ev2_contract_generated", "合同已生成"), "success");

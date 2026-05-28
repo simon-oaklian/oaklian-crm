@@ -1263,15 +1263,15 @@ def _handle_estimate_full(handler, get_conn, eid):
         )
         linked = cur.fetchone()
     linked = dict(linked) if linked else None
+    if linked and est.get("customer_id") not in (None, "") and linked.get("customer_id") not in (None, ""):
+        if int(est.get("customer_id")) != int(linked.get("customer_id")):
+            linked = None
     est["linked_contract_id"] = linked.get("id") if linked else None
     est["linked_contract_no"] = linked.get("contract_no") if linked else None
     est["linked_contract_customer_id"] = linked.get("customer_id") if linked else None
     est["linked_contract_total_amount"] = linked.get("total_amount") if linked else None
     est["linked_contract_sign_status"] = (linked.get("sign_status") or linked.get("signed_status")) if linked else None
-    if linked and est.get("customer_id") not in (None, "") and linked.get("customer_id") not in (None, ""):
-        est["linked_contract_mismatch"] = int(est.get("customer_id")) != int(linked.get("customer_id"))
-    else:
-        est["linked_contract_mismatch"] = False
+    est["linked_contract_mismatch"] = False
     conn.close()
     handler._json_response(est)
     return True

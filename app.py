@@ -3838,10 +3838,16 @@ class CRMHandler(BaseHTTPRequestHandler):
                 if confirm_status == "confirmed" and not r.get("confirmed_at"):
                     r["confirmed_at"] = r.get("updated_at") or r.get("created_at")
                 linked = link_map.get(r.get("id"))
+                if linked and linked.get("customer_id") not in (None, "") and r.get("customer_id") not in (None, ""):
+                    if int(linked.get("customer_id")) != int(r.get("customer_id")):
+                        linked = None
                 if not linked and r.get("contract_id"):
                     cur.execute("SELECT id,contract_no,customer_id,total_amount,title,address FROM contracts WHERE id=?", (r.get("contract_id"),))
                     c = cur.fetchone()
                     linked = row_to_dict(c) if c else None
+                    if linked and linked.get("customer_id") not in (None, "") and r.get("customer_id") not in (None, ""):
+                        if int(linked.get("customer_id")) != int(r.get("customer_id")):
+                            linked = None
                 r["linked_contract_id"] = linked["id"] if linked else None
                 r["linked_contract_no"] = linked["contract_no"] if linked else None
                 r["linked_contract_customer_id"] = linked["customer_id"] if linked else None
@@ -3854,10 +3860,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 r["customer_name"] = (customer or {}).get("name")
                 r["customer_phone"] = (customer or {}).get("phone")
                 r["customer_address"] = r.get("address") or ((customer or {}).get("primary_address"))
-                if linked and linked.get("customer_id") not in (None, "") and r.get("customer_id") not in (None, ""):
-                    r["linked_contract_mismatch"] = int(linked.get("customer_id")) != int(r.get("customer_id"))
-                else:
-                    r["linked_contract_mismatch"] = False
+                r["linked_contract_mismatch"] = False
                 source_type = "lead" if normalize_key((customer or {}).get("status") or "") in {
                     "lead",
                     "measuring",
@@ -4375,9 +4378,13 @@ class CRMHandler(BaseHTTPRequestHandler):
         if estimate["contract_id"]:
             cur.execute("SELECT * FROM contracts WHERE id=?", (estimate["contract_id"],))
             existed = cur.fetchone()
+            if existed and existed["customer_id"] and estimate["customer_id"] and int(existed["customer_id"]) != int(estimate["customer_id"]):
+                existed = None
         if not existed:
             cur.execute("SELECT * FROM contracts WHERE estimate_id=? ORDER BY id ASC LIMIT 1", (estimate_id,))
             existed = cur.fetchone()
+            if existed and existed["customer_id"] and estimate["customer_id"] and int(existed["customer_id"]) != int(estimate["customer_id"]):
+                existed = None
         if existed:
             ts_existing = now_ts()
             if not estimate["contract_id"]:
