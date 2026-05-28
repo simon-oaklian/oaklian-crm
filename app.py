@@ -10185,6 +10185,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "name": "姓名", "email": "邮箱", "phone": "电话", "note": "备注", "download": "打开/下载 PDF",
                 "confirm_text": "我确认已阅读并同意此报价内容。正式合同将另行发送签署。",
                 "subtotal": "明细小计", "total": "总计", "status": "状态", "already": "该报价已处理。",
+                "acceptance": "报价确认", "signature": "确认签名", "date": "确认日期",
             },
             "en": {
                 "title": "Quote Confirmation", "estimate": "Estimate", "customer": "Customer Info", "details": "Estimate Details",
@@ -10192,6 +10193,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "name": "Name", "email": "Email", "phone": "Phone", "note": "Note", "download": "Open / Download PDF",
                 "confirm_text": "I have reviewed and agree to this quote. The formal contract will be sent separately for signature.",
                 "subtotal": "Items Subtotal", "total": "Grand Total", "status": "Status", "already": "This quote has already been processed.",
+                "acceptance": "Quote Acceptance", "signature": "Signature", "date": "Date",
             },
             "es": {
                 "title": "Confirmacion de cotizacion", "estimate": "Cotizacion", "customer": "Cliente", "details": "Detalle",
@@ -10199,6 +10201,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "name": "Nombre", "email": "Correo", "phone": "Telefono", "note": "Nota", "download": "Abrir / Descargar PDF",
                 "confirm_text": "He revisado y acepto esta cotizacion. El contrato formal se enviara por separado para firma.",
                 "subtotal": "Subtotal", "total": "Total", "status": "Estado", "already": "Esta cotizacion ya fue procesada.",
+                "acceptance": "Aceptacion de cotizacion", "signature": "Firma", "date": "Fecha",
             },
         }[lang]
 
@@ -10239,12 +10242,13 @@ class CRMHandler(BaseHTTPRequestHandler):
         processed = self._estimate_confirm_status_key(estimate.get("confirm_status")) in {"confirmed", "rejected"}
         form_html = f"<div class='notice'>{labels['already']} {labels['status']}: {esc(estimate.get('confirm_status'))}</div>" if processed else f"""
           <form id="quote-form" class="confirm-box">
-            <label>{labels['name']}<input name="client_name" required value="{esc(estimate.get('customer_name'))}" /></label>
-            <label>{labels['email']}<input name="client_email" value="{esc(estimate.get('customer_email'))}" /></label>
-            <label>{labels['phone']}<input name="client_phone" value="{esc(estimate.get('customer_phone'))}" /></label>
-            <label>{labels['note']}<textarea name="confirm_note"></textarea></label>
-            <label class="check"><input type="checkbox" name="agree" required /> {labels['confirm_text']}</label>
-            <div class="actions">
+            <div class="confirm-title">{labels['acceptance']}</div>
+            <div class="confirm-text">{labels['confirm_text']}</div>
+            <div class="confirm-grid">
+              <label>{labels['signature']}<input name="client_name" required value="{esc(estimate.get('customer_name'))}" /></label>
+              <label>{labels['date']}<input value="{esc(to_iso_date(datetime.now()))}" readonly /></label>
+            </div>
+            <div class="actions compact-actions">
               <button type="button" id="confirm-btn">{labels['confirm']}</button>
             </div>
           </form>
@@ -10265,13 +10269,16 @@ table{{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}} t
 .quote-table .col-item{{width:26%}} .quote-table .col-desc{{width:34%}} .quote-table .col-qty{{width:12%}} .quote-table .col-unit{{width:10%}} .quote-table .col-subtotal{{width:18%}}
 .quote-table td:nth-child(3),.quote-table th:nth-child(3),.quote-table td:nth-child(5),.quote-table th:nth-child(5){{text-align:right}}
 .quote-table td:nth-child(4),.quote-table th:nth-child(4){{text-align:center}}
-.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:24px;padding:18px;border:1px solid #d8dee8;background:#fbfcfe}}
-label{{display:block;margin-top:10px;font-weight:600}} input,textarea{{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd7e3;border-radius:4px;margin-top:4px;font:inherit}} textarea{{min-height:80px}}
+.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:18px;padding:16px 18px;border:1px solid #d8dee8;background:#fbfcfe}}
+.confirm-title{{font-weight:700;font-size:16px;margin-bottom:6px}} .confirm-text{{color:#475467;font-size:13px;line-height:1.45;margin-bottom:12px}}
+.confirm-grid{{display:grid;grid-template-columns:1fr 180px;gap:14px;align-items:end}}
+label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd7e3;border-radius:4px;margin-top:4px;font:inherit}} textarea{{min-height:80px}}
 .check{{display:flex;gap:8px;align-items:flex-start;font-weight:400}} .check input{{width:auto;margin-top:3px}}
 .actions{{display:flex;gap:10px;margin-top:16px}} button{{padding:11px 18px;border:1px solid #1f2937;background:#1f2937;color:#fff;border-radius:4px;font-weight:700;cursor:pointer}} button.secondary{{background:#fff;color:#1f2937}}
+.compact-actions{{margin-top:12px}}
 .notice{{margin-top:20px;padding:14px;background:#eef7ee;border:1px solid #b8d8b8}}
 @media print{{body{{background:#fff}}.page{{box-shadow:none;margin:0;width:auto}}.confirm-box,.download{{display:none}}}}
-@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}}}
+@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}.confirm-grid{{grid-template-columns:1fr}}}}
 </style></head>
 <body><main class="page">
 <div class="top"><div class="brand"><img class="logo" src="{esc(logo_url)}" alt="Oaklian logo"><div class="brand-text"><h1>{esc(company_name)}</h1><div class="muted">{esc(footer_text)}</div></div></div>
