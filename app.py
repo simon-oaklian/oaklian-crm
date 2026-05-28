@@ -1261,6 +1261,7 @@ def init_db():
             "client_name": "TEXT",
             "client_email": "TEXT",
             "client_phone": "TEXT",
+            "client_signature_data": "TEXT",
             "client_ip": "TEXT",
             "client_user_agent": "TEXT",
         },
@@ -10204,6 +10205,21 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "acceptance": "Aceptacion de cotizacion", "signature": "Firma", "date": "Fecha",
             },
         }[lang]
+        if lang == "zh":
+            labels.update({
+                "clear": "清除签名",
+                "signature_required": "请先完成手写签名。",
+            })
+        elif lang == "es":
+            labels.update({
+                "clear": "Borrar firma",
+                "signature_required": "Complete la firma manuscrita primero.",
+            })
+        else:
+            labels.update({
+                "clear": "Clear signature",
+                "signature_required": "Please complete the handwritten signature first.",
+            })
 
         conn = get_conn()
         cur = conn.cursor()
@@ -10240,13 +10256,33 @@ class CRMHandler(BaseHTTPRequestHandler):
             for m in milestones
         ) or "<tr><td colspan='3'>-</td></tr>"
         processed = self._estimate_confirm_status_key(estimate.get("confirm_status")) in {"confirmed", "rejected"}
-        form_html = f"<div class='notice'>{labels['already']} {labels['status']}: {esc(estimate.get('confirm_status'))}</div>" if processed else f"""
+        signature_data = str(estimate.get("client_signature_data") or "")
+        if processed and signature_data.startswith("data:image/png;base64,"):
+            form_html = f"""
+          <div class="notice accepted-box">
+            <div class="confirm-title">{labels['already']} {labels['status']}: {esc(estimate.get('confirm_status'))}</div>
+            <div class="accepted-meta">
+              <div><b>{labels['signature']}:</b> {esc(estimate.get('client_name') or estimate.get('customer_name'))}</div>
+              <div><b>{labels['date']}:</b> {esc(estimate.get('client_action_at') or estimate.get('confirmed_at'))}</div>
+            </div>
+            <img class="signature-img" src="{esc(signature_data)}" alt="signature">
+          </div>
+            """
+        elif processed:
+            form_html = f"<div class='notice'>{labels['already']} {labels['status']}: {esc(estimate.get('confirm_status'))}</div>"
+        else:
+            form_html = f"""
           <form id="quote-form" class="confirm-box">
             <div class="confirm-title">{labels['acceptance']}</div>
             <div class="confirm-text">{labels['confirm_text']}</div>
             <div class="confirm-grid">
               <label>{labels['signature']}<input name="client_name" required value="{esc(estimate.get('customer_name'))}" /></label>
               <label>{labels['date']}<input value="{esc(to_iso_date(datetime.now()))}" readonly /></label>
+            </div>
+            <div class="signature-row">
+              <canvas id="signature-pad" class="signature-pad" aria-label="{labels['signature']}"></canvas>
+              <input type="hidden" name="client_signature_data" id="client_signature_data">
+              <button type="button" id="clear-signature" class="secondary small-btn">{labels['clear']}</button>
             </div>
             <div class="actions compact-actions">
               <button type="button" id="confirm-btn">{labels['confirm']}</button>
@@ -10272,13 +10308,18 @@ table{{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}} t
 .total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:18px;padding:16px 18px;border:1px solid #d8dee8;background:#fbfcfe}}
 .confirm-title{{font-weight:700;font-size:16px;margin-bottom:6px}} .confirm-text{{color:#475467;font-size:13px;line-height:1.45;margin-bottom:12px}}
 .confirm-grid{{display:grid;grid-template-columns:1fr 180px;gap:14px;align-items:end}}
+.signature-row{{margin-top:12px}}
+.signature-pad{{display:block;box-sizing:border-box;width:100%;height:150px;border:1px solid #cfd7e3;background:#fff;border-radius:4px;touch-action:none;cursor:crosshair}}
+.small-btn{{padding:8px 12px;margin-top:8px}}
+.accepted-meta{{display:grid;grid-template-columns:1fr 220px;gap:12px;margin-top:8px;color:#475467}}
+.signature-img{{display:block;max-width:320px;max-height:110px;margin-top:10px;border:1px solid #d8dee8;background:#fff}}
 label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd7e3;border-radius:4px;margin-top:4px;font:inherit}} textarea{{min-height:80px}}
 .check{{display:flex;gap:8px;align-items:flex-start;font-weight:400}} .check input{{width:auto;margin-top:3px}}
 .actions{{display:flex;gap:10px;margin-top:16px}} button{{padding:11px 18px;border:1px solid #1f2937;background:#1f2937;color:#fff;border-radius:4px;font-weight:700;cursor:pointer}} button.secondary{{background:#fff;color:#1f2937}}
 .compact-actions{{margin-top:12px}}
 .notice{{margin-top:20px;padding:14px;background:#eef7ee;border:1px solid #b8d8b8}}
 @media print{{body{{background:#fff}}.page{{box-shadow:none;margin:0;width:auto}}.confirm-box,.download{{display:none}}}}
-@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}.confirm-grid{{grid-template-columns:1fr}}}}
+@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}.confirm-grid,.accepted-meta{{grid-template-columns:1fr}}}}
 </style></head>
 <body><main class="page">
 <div class="top"><div class="brand"><img class="logo" src="{esc(logo_url)}" alt="Oaklian logo"><div class="brand-text"><h1>{esc(company_name)}</h1><div class="muted">{esc(footer_text)}</div></div></div>
@@ -10293,10 +10334,82 @@ label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:b
 </main>
 <script>
 const token = {json.dumps(token)};
+const signatureRequired = {json.dumps(labels['signature_required'])};
+const pad = document.getElementById('signature-pad');
+const signatureInput = document.getElementById('client_signature_data');
+const ctx = pad ? pad.getContext('2d') : null;
+let drawing = false;
+let signed = false;
+function resizePad() {{
+  if (!pad || !ctx) return;
+  const ratio = window.devicePixelRatio || 1;
+  const rect = pad.getBoundingClientRect();
+  const saved = signed ? pad.toDataURL('image/png') : null;
+  pad.width = Math.max(1, Math.floor(rect.width * ratio));
+  pad.height = Math.max(1, Math.floor(150 * ratio));
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = '#111827';
+  if (saved) {{
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, 150);
+    img.src = saved;
+  }}
+}}
+function point(evt) {{
+  const rect = pad.getBoundingClientRect();
+  const src = evt.touches && evt.touches[0] ? evt.touches[0] : evt;
+  return {{ x: src.clientX - rect.left, y: src.clientY - rect.top }};
+}}
+function startDraw(evt) {{
+  if (!pad || !ctx) return;
+  evt.preventDefault();
+  drawing = true;
+  signed = true;
+  const p = point(evt);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+}}
+function moveDraw(evt) {{
+  if (!drawing || !ctx) return;
+  evt.preventDefault();
+  const p = point(evt);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+}}
+function endDraw(evt) {{
+  if (!drawing) return;
+  evt.preventDefault();
+  drawing = false;
+}}
+if (pad) {{
+  resizePad();
+  window.addEventListener('resize', resizePad);
+  pad.addEventListener('mousedown', startDraw);
+  pad.addEventListener('mousemove', moveDraw);
+  window.addEventListener('mouseup', endDraw);
+  pad.addEventListener('touchstart', startDraw, {{passive:false}});
+  pad.addEventListener('touchmove', moveDraw, {{passive:false}});
+  pad.addEventListener('touchend', endDraw, {{passive:false}});
+}}
+document.getElementById('clear-signature')?.addEventListener('click', () => {{
+  signed = false;
+  if (pad && ctx) ctx.clearRect(0, 0, pad.width, pad.height);
+  if (signatureInput) signatureInput.value = '';
+}});
 async function send(action) {{
   const form = document.getElementById('quote-form');
   if (!form) return;
-  if (action === 'confirm' && !form.reportValidity()) return;
+  if (action === 'confirm') {{
+    if (!form.reportValidity()) return;
+    if (!signed || !pad || !signatureInput) {{
+      alert(signatureRequired);
+      return;
+    }}
+    signatureInput.value = pad.toDataURL('image/png');
+  }}
   const data = Object.fromEntries(new FormData(form).entries());
   const res = await fetch(`/api/public/quotes/${{token}}/${{action}}`, {{
     method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(data)
@@ -10322,8 +10435,14 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
         email = str(payload.get("client_email") or "").strip()
         phone = str(payload.get("client_phone") or "").strip()
         note = str(payload.get("confirm_note") or "").strip()
-        if action == "confirm" and not name:
-            return self._json_response({"error": "Name is required"}, 400)
+        signature_data = str(payload.get("client_signature_data") or "").strip()
+        if action == "confirm":
+            if not name:
+                return self._json_response({"error": "Name is required"}, 400)
+            if not signature_data.startswith("data:image/png;base64,") or len(signature_data) < 200:
+                return self._json_response({"error": "Signature is required"}, 400)
+            if len(signature_data) > 300000:
+                return self._json_response({"error": "Signature is too large"}, 400)
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("SELECT * FROM estimates WHERE public_token=?", (token,))
@@ -10340,6 +10459,8 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
         ts = now_ts()
         ip = self.client_address[0] if self.client_address else ""
         ua = self.headers.get("User-Agent", "")
+        client_email_value = email if "client_email" in payload else estimate.get("client_email")
+        client_phone_value = phone if "client_phone" in payload else estimate.get("client_phone")
         full_note = note
         if action == "confirm":
             full_note = (note + "\n" if note else "") + f"Client confirmed via public quote page: {name}"
@@ -10349,7 +10470,7 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
             SET confirm_status=?, status=?, confirmed_at=?,
                 confirmed_by=NULL, confirm_note=CASE WHEN ?<>'' THEN ? ELSE confirm_note END,
                 client_action_at=?, client_name=?, client_email=?, client_phone=?,
-                client_ip=?, client_user_agent=?, updated_at=?
+                client_signature_data=?, client_ip=?, client_user_agent=?, updated_at=?
             WHERE id=?
             """,
             (
@@ -10360,8 +10481,9 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
                 full_note,
                 ts,
                 name,
-                email,
-                phone,
+                client_email_value,
+                client_phone_value,
+                signature_data if action == "confirm" else estimate.get("client_signature_data"),
                 ip,
                 ua,
                 ts,
