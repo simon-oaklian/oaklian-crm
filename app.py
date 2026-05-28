@@ -10273,19 +10273,24 @@ class CRMHandler(BaseHTTPRequestHandler):
         else:
             form_html = f"""
           <form id="quote-form" class="confirm-box">
-            <div class="confirm-title">{labels['acceptance']}</div>
-            <div class="confirm-text">{labels['confirm_text']}</div>
+            <div class="confirm-head">
+              <div>
+                <div class="confirm-title">{labels['acceptance']}</div>
+                <div class="confirm-text">{labels['confirm_text']}</div>
+              </div>
+              <button type="button" id="confirm-btn">{labels['confirm']}</button>
+            </div>
             <div class="confirm-grid">
-              <label>{labels['signature']}<input name="client_name" required value="{esc(estimate.get('customer_name'))}" /></label>
+              <label>{labels['name']}<input name="client_name" required value="{esc(estimate.get('customer_name'))}" /></label>
               <label>{labels['date']}<input value="{esc(to_iso_date(datetime.now()))}" readonly /></label>
             </div>
             <div class="signature-row">
+              <div class="signature-line-title">
+                <span>{labels['signature']}</span>
+                <button type="button" id="clear-signature" class="link-btn">{labels['clear']}</button>
+              </div>
               <canvas id="signature-pad" class="signature-pad" aria-label="{labels['signature']}"></canvas>
               <input type="hidden" name="client_signature_data" id="client_signature_data">
-              <button type="button" id="clear-signature" class="secondary small-btn">{labels['clear']}</button>
-            </div>
-            <div class="actions compact-actions">
-              <button type="button" id="confirm-btn">{labels['confirm']}</button>
             </div>
           </form>
         """
@@ -10305,12 +10310,14 @@ table{{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}} t
 .quote-table .col-item{{width:26%}} .quote-table .col-desc{{width:34%}} .quote-table .col-qty{{width:12%}} .quote-table .col-unit{{width:10%}} .quote-table .col-subtotal{{width:18%}}
 .quote-table td:nth-child(3),.quote-table th:nth-child(3),.quote-table td:nth-child(5),.quote-table th:nth-child(5){{text-align:right}}
 .quote-table td:nth-child(4),.quote-table th:nth-child(4){{text-align:center}}
-.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:18px;padding:16px 18px;border:1px solid #d8dee8;background:#fbfcfe}}
-.confirm-title{{font-weight:700;font-size:16px;margin-bottom:6px}} .confirm-text{{color:#475467;font-size:13px;line-height:1.45;margin-bottom:12px}}
-.confirm-grid{{display:grid;grid-template-columns:1fr 180px;gap:14px;align-items:end}}
-.signature-row{{margin-top:12px}}
-.signature-pad{{display:block;box-sizing:border-box;width:100%;height:150px;border:1px solid #cfd7e3;background:#fff;border-radius:4px;touch-action:none;cursor:crosshair}}
-.small-btn{{padding:8px 12px;margin-top:8px}}
+.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:16px;padding:14px 16px;border:1px solid #d8dee8;background:#fff}}
+.confirm-head{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;border-bottom:1px solid #e6eaf0;padding-bottom:10px;margin-bottom:12px}}
+.confirm-title{{font-weight:700;font-size:15px;margin-bottom:4px}} .confirm-text{{color:#475467;font-size:12px;line-height:1.4;max-width:560px}}
+.confirm-grid{{display:grid;grid-template-columns:1fr 180px;gap:12px;align-items:end}}
+.signature-row{{margin-top:10px}}
+.signature-line-title{{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:700}}
+.signature-pad{{display:block;box-sizing:border-box;width:100%;height:104px;border:1px solid #cfd7e3;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(to top,transparent 28px,#e7ebf1 29px,transparent 30px) border-box;border-radius:3px;touch-action:none;cursor:crosshair}}
+.link-btn{{padding:0;border:0;background:transparent;color:#475467;font-size:12px;font-weight:600;text-decoration:underline;cursor:pointer}}
 .accepted-meta{{display:grid;grid-template-columns:1fr 220px;gap:12px;margin-top:8px;color:#475467}}
 .signature-img{{display:block;max-width:320px;max-height:110px;margin-top:10px;border:1px solid #d8dee8;background:#fff}}
 label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd7e3;border-radius:4px;margin-top:4px;font:inherit}} textarea{{min-height:80px}}
@@ -10319,7 +10326,7 @@ label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:b
 .compact-actions{{margin-top:12px}}
 .notice{{margin-top:20px;padding:14px;background:#eef7ee;border:1px solid #b8d8b8}}
 @media print{{body{{background:#fff}}.page{{box-shadow:none;margin:0;width:auto}}.confirm-box,.download{{display:none}}}}
-@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}.confirm-grid,.accepted-meta{{grid-template-columns:1fr}}}}
+@media (max-width:700px){{.page{{padding:22px}}.top{{display:block}}.brand{{margin-bottom:16px}}.confirm-head{{display:block}}.confirm-head button{{margin-top:10px}}.confirm-grid,.accepted-meta{{grid-template-columns:1fr}}}}
 </style></head>
 <body><main class="page">
 <div class="top"><div class="brand"><img class="logo" src="{esc(logo_url)}" alt="Oaklian logo"><div class="brand-text"><h1>{esc(company_name)}</h1><div class="muted">{esc(footer_text)}</div></div></div>
@@ -10346,7 +10353,7 @@ function resizePad() {{
   const rect = pad.getBoundingClientRect();
   const saved = signed ? pad.toDataURL('image/png') : null;
   pad.width = Math.max(1, Math.floor(rect.width * ratio));
-  pad.height = Math.max(1, Math.floor(150 * ratio));
+  pad.height = Math.max(1, Math.floor(104 * ratio));
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -10354,7 +10361,7 @@ function resizePad() {{
   ctx.strokeStyle = '#111827';
   if (saved) {{
     const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, 150);
+    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, 104);
     img.src = saved;
   }}
 }}
