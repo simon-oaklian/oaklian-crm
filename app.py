@@ -1255,8 +1255,17 @@ def init_db():
             "confirmed_by": "INTEGER",
             "confirm_note": "TEXT",
             "manual_adjustment": "REAL DEFAULT 0",
+            "public_token": "TEXT",
+            "sent_at": "TEXT",
+            "client_action_at": "TEXT",
+            "client_name": "TEXT",
+            "client_email": "TEXT",
+            "client_phone": "TEXT",
+            "client_ip": "TEXT",
+            "client_user_agent": "TEXT",
         },
     )
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_estimates_public_token ON estimates(public_token)")
     ensure_columns(cur, "estimate_payment_milestones", {"custom_stage_name": "TEXT"})
     ensure_columns(
         cur,
@@ -3860,6 +3869,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 r["customer_name"] = (customer or {}).get("name")
                 r["customer_phone"] = (customer or {}).get("phone")
                 r["customer_address"] = r.get("address") or ((customer or {}).get("primary_address"))
+                r["public_url"] = self._public_quote_url(r.get("public_token")) if r.get("public_token") else ""
                 r["linked_contract_mismatch"] = False
                 source_type = "lead" if normalize_key((customer or {}).get("status") or "") in {
                     "lead",
@@ -4622,6 +4632,8 @@ class CRMHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path.startswith("/quote/"):
+            return self._public_quote_page(path)
         if path == "/":
             return self._serve_static_file("index.html", STATIC_DIR)
         if path == "/favicon.ico":
@@ -4761,6 +4773,8 @@ class CRMHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if ev2_routes.handle_post(self, get_conn): return
         path = urlparse(self.path).path
+        if path.startswith("/api/public/quotes/") and (path.endswith("/confirm") or path.endswith("/reject")):
+            return self._public_quote_action(path)
         if path == "/api/auth/login":
             return self._auth_login()
         if path == "/api/auth/logout":
@@ -4876,6 +4890,11 @@ class CRMHandler(BaseHTTPRequestHandler):
             if not user:
                 return
             return self._estimate_mark_status(path, user, "sent")
+        if path.startswith("/api/estimates/") and path.endswith("/send-to-customer"):
+            user = self._require_auth()
+            if not user:
+                return
+            return self._estimate_send_to_customer(path, user)
         if path.startswith("/api/estimates/") and path.endswith("/mark-confirmed"):
             user = self._require_auth()
             if not user:
@@ -7206,6 +7225,57 @@ class CRMHandler(BaseHTTPRequestHandler):
         item = row_to_dict(cur.fetchone())
         self._enrich_resource_rows(cur, "estimates", [item])
         conn.close()
+        return self._json_response(item)
+
+    def _public_quote_url(self, token):
+        base = (BASE_URL or "").strip().rstrip("/")
+        if not base or base.startswith("http://0.0.0.0"):
+            base = ""
+        return f"{base}/quote/{token}" if base else f"/quote/{token}"
+
+    def _estimate_send_to_customer(self, path, user):
+        role_key = normalize_key(user.get("role") or "")
+        if role_key not in {"owner", "manager"}:
+            return self._json_response({"error": "Forbidden: owner/manager only"}, 403)
+        if not self._has_module(user, "estimates"):
+            return self._json_response({"error": "Forbidden: estimates"}, 403)
+        parts = [p for p in path.split("/") if p]
+        if len(parts) != 4 or parts[0] != "api" or parts[1] != "estimates":
+            return self._json_response({"error": "Not found"}, 404)
+        try:
+            estimate_id = int(parts[2])
+        except ValueError:
+            return self._json_response({"error": "Invalid estimate id"}, 400)
+
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM estimates WHERE id=?", (estimate_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return self._json_response({"error": "Estimate not found"}, 404)
+        existing = row_to_dict(row)
+        current = self._estimate_confirm_status_key(existing.get("confirm_status") or existing.get("status"))
+        if current not in {"draft", "sent"}:
+            conn.close()
+            return self._json_response({"error": f"Cannot send estimate in {current} status"}, 400)
+        ts = now_ts()
+        token = existing.get("public_token") or secrets.token_urlsafe(24)
+        cur.execute(
+            """
+            UPDATE estimates
+            SET public_token=?, sent_at=COALESCE(sent_at,?), confirm_status='sent', status=?,
+                updated_at=?
+            WHERE id=?
+            """,
+            (token, ts, self._estimate_legacy_status("sent"), ts, estimate_id),
+        )
+        conn.commit()
+        cur.execute("SELECT * FROM estimates WHERE id=?", (estimate_id,))
+        item = row_to_dict(cur.fetchone())
+        self._enrich_resource_rows(cur, "estimates", [item])
+        conn.close()
+        item["public_url"] = self._public_quote_url(token)
         return self._json_response(item)
 
     def _contract_mark_status(self, path, user, target_status):
@@ -9993,6 +10063,225 @@ class CRMHandler(BaseHTTPRequestHandler):
             return True
         self._estimate_pdf_html(estimate_id, self._lang_from_query(query), auto_print=True, mode="pdf")
         return True
+
+    def _public_quote_lookup(self, token):
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT e.*, c.name AS customer_name, c.phone AS customer_phone, c.email AS customer_email,
+                   c.primary_address AS customer_address
+            FROM estimates e
+            LEFT JOIN customers c ON c.id=e.customer_id
+            WHERE e.public_token=?
+            """,
+            (token,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return None, None, None
+        estimate = row_to_dict(row)
+        cur.execute("SELECT * FROM estimate_sections WHERE estimate_id=? ORDER BY sort_order,id", (estimate["id"],))
+        sections = [row_to_dict(x) for x in cur.fetchall()]
+        for sec in sections:
+            cur.execute("SELECT * FROM estimate_lines WHERE section_id=? ORDER BY sort_order,id", (sec["id"],))
+            sec["lines"] = [row_to_dict(x) for x in cur.fetchall()]
+        cur.execute(
+            """
+            SELECT epm.*, psti.step_name AS stage_step_name
+            FROM estimate_payment_milestones epm
+            LEFT JOIN project_stage_template_items psti ON psti.id=epm.trigger_stage_template_item_id
+            WHERE epm.estimate_id=?
+            ORDER BY epm.sort_order, epm.id
+            """,
+            (estimate["id"],),
+        )
+        milestones = [row_to_dict(x) for x in cur.fetchall()]
+        conn.close()
+        return estimate, sections, milestones
+
+    def _public_quote_page(self, path):
+        parts = [p for p in path.split("/") if p]
+        if len(parts) != 2 or parts[0] != "quote":
+            return self._json_response({"error": "Not found"}, 404)
+        token = parts[1]
+        estimate, sections, milestones = self._public_quote_lookup(token)
+        if not estimate:
+            return self._html_response("<h1>Quote not found</h1>", 404)
+        lang = (estimate.get("pdf_language") or DEFAULT_LANGUAGE or "zh").lower()
+        if lang not in {"zh", "en", "es"}:
+            lang = "zh"
+        labels = {
+            "zh": {
+                "title": "报价确认", "estimate": "估价单", "customer": "客户信息", "details": "报价明细",
+                "summary": "总价", "payment": "付款节点", "confirm": "确认报价", "reject": "拒绝报价",
+                "name": "姓名", "email": "邮箱", "phone": "电话", "note": "备注", "download": "打开/下载 PDF",
+                "confirm_text": "我确认已阅读并同意此报价内容。正式合同将另行发送签署。",
+                "subtotal": "明细小计", "total": "总计", "status": "状态", "already": "该报价已处理。",
+            },
+            "en": {
+                "title": "Quote Confirmation", "estimate": "Estimate", "customer": "Customer Info", "details": "Estimate Details",
+                "summary": "Total", "payment": "Payment Milestones", "confirm": "Confirm Quote", "reject": "Reject Quote",
+                "name": "Name", "email": "Email", "phone": "Phone", "note": "Note", "download": "Open / Download PDF",
+                "confirm_text": "I have reviewed and agree to this quote. The formal contract will be sent separately for signature.",
+                "subtotal": "Items Subtotal", "total": "Grand Total", "status": "Status", "already": "This quote has already been processed.",
+            },
+            "es": {
+                "title": "Confirmacion de cotizacion", "estimate": "Cotizacion", "customer": "Cliente", "details": "Detalle",
+                "summary": "Total", "payment": "Hitos de pago", "confirm": "Confirmar cotizacion", "reject": "Rechazar cotizacion",
+                "name": "Nombre", "email": "Correo", "phone": "Telefono", "note": "Nota", "download": "Abrir / Descargar PDF",
+                "confirm_text": "He revisado y acepto esta cotizacion. El contrato formal se enviara por separado para firma.",
+                "subtotal": "Subtotal", "total": "Total", "status": "Estado", "already": "Esta cotizacion ya fue procesada.",
+            },
+        }[lang]
+
+        def money(v):
+            return "$" + format(float(v or 0), ",.2f")
+        def esc(v):
+            return html_escape(str(v or ""))
+        rows_html = []
+        for sec in sections:
+            lines = sec.get("lines") or []
+            line_rows = "".join(
+                f"<tr><td>{esc(x.get('item_name'))}</td><td>{esc(x.get('description'))}</td>"
+                f"<td class='num'>{esc(x.get('quantity'))}</td><td>{esc(x.get('unit'))}</td>"
+                f"<td class='num'>{money(x.get('line_subtotal'))}</td></tr>"
+                for x in lines
+            )
+            rows_html.append(
+                f"<section class='block'><h3>{esc(sec.get('name_zh') or sec.get('name') or '-')}</h3>"
+                f"<table><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit</th><th>Subtotal</th></tr></thead>"
+                f"<tbody>{line_rows}</tbody></table></section>"
+            )
+        ms_html = "".join(
+            f"<tr><td>{esc(m.get('name'))}</td><td>{esc(m.get('custom_stage_name') or m.get('stage_step_name') or '')}</td>"
+            f"<td class='num'>{float(m.get('amount_pct') or 0):.1f}%</td></tr>"
+            for m in milestones
+        ) or "<tr><td colspan='3'>-</td></tr>"
+        processed = self._estimate_confirm_status_key(estimate.get("confirm_status")) in {"confirmed", "rejected"}
+        form_html = f"<div class='notice'>{labels['already']} {labels['status']}: {esc(estimate.get('confirm_status'))}</div>" if processed else f"""
+          <form id="quote-form" class="confirm-box">
+            <label>{labels['name']}<input name="client_name" required value="{esc(estimate.get('customer_name'))}" /></label>
+            <label>{labels['email']}<input name="client_email" value="{esc(estimate.get('customer_email'))}" /></label>
+            <label>{labels['phone']}<input name="client_phone" value="{esc(estimate.get('customer_phone'))}" /></label>
+            <label>{labels['note']}<textarea name="confirm_note"></textarea></label>
+            <label class="check"><input type="checkbox" name="agree" required /> {labels['confirm_text']}</label>
+            <div class="actions">
+              <button type="button" id="confirm-btn">{labels['confirm']}</button>
+              <button type="button" id="reject-btn" class="secondary">{labels['reject']}</button>
+            </div>
+          </form>
+        """
+        html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{labels['title']} #{estimate['id']}</title>
+<style>
+body{{margin:0;background:#e8ebf0;color:#1d2433;font-family:Arial,'Microsoft YaHei',sans-serif}}
+.page{{width:min(900px,calc(100vw - 28px));margin:24px auto;background:#fff;padding:36px;box-shadow:0 2px 12px rgba(0,0,0,.18)}}
+.top{{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #777;padding-bottom:16px}}
+h1{{margin:0;font-size:24px}} h2{{font-size:17px;border-left:4px solid #777;padding-left:10px;margin-top:24px}} h3{{font-size:15px;margin:18px 0 8px}}
+.muted{{color:#667085}} .grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px 40px}}
+table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{border-bottom:1px solid #ddd;padding:8px;text-align:left}} th{{background:#f3f5f8}} .num{{text-align:right}}
+.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:24px;padding:18px;border:1px solid #d8dee8;background:#fbfcfe}}
+label{{display:block;margin-top:10px;font-weight:600}} input,textarea{{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd7e3;border-radius:4px;margin-top:4px;font:inherit}} textarea{{min-height:80px}}
+.check{{display:flex;gap:8px;align-items:flex-start;font-weight:400}} .check input{{width:auto;margin-top:3px}}
+.actions{{display:flex;gap:10px;margin-top:16px}} button{{padding:11px 18px;border:1px solid #1f2937;background:#1f2937;color:#fff;border-radius:4px;font-weight:700;cursor:pointer}} button.secondary{{background:#fff;color:#1f2937}}
+.notice{{margin-top:20px;padding:14px;background:#eef7ee;border:1px solid #b8d8b8}}
+@media print{{body{{background:#fff}}.page{{box-shadow:none;margin:0;width:auto}}.confirm-box,.download{{display:none}}}}
+</style></head>
+<body><main class="page">
+<div class="top"><div><h1>Oaklian Builders</h1><div class="muted">OAKLIAN Remodeling & Construction LLC</div></div>
+<div><h1>{labels['title']}</h1><div>{labels['estimate']} #{int(estimate['id']):05d}</div><div>{esc(estimate.get('updated_at'))}</div></div></div>
+<h2>{labels['customer']}</h2><div class="grid"><div><b>Name:</b> {esc(estimate.get('customer_name'))}</div><div><b>Phone:</b> {esc(estimate.get('customer_phone'))}</div>
+<div><b>Address:</b> {esc(estimate.get('address') or estimate.get('customer_address'))}</div><div><b>Project:</b> {esc(estimate.get('title'))}</div></div>
+<p class="download"><a href="/api/v2/estimates/{estimate['id']}/pdf?lang={lang}" target="_blank">{labels['download']}</a></p>
+<h2>{labels['details']}</h2>{''.join(rows_html)}
+<h2>{labels['payment']}</h2><table><thead><tr><th>Name</th><th>Stage</th><th>Percent</th></tr></thead><tbody>{ms_html}</tbody></table>
+<h2>{labels['summary']}</h2><div class="total">{labels['total']}: {money(estimate.get('total_amount'))}</div>
+{form_html}
+</main>
+<script>
+const token = {json.dumps(token)};
+async function send(action) {{
+  const form = document.getElementById('quote-form');
+  if (!form) return;
+  if (action === 'confirm' && !form.reportValidity()) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const res = await fetch(`/api/public/quotes/${{token}}/${{action}}`, {{
+    method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(data)
+  }});
+  const out = await res.json().catch(() => ({{}}));
+  if (!res.ok) {{ alert(out.error || 'Failed'); return; }}
+  location.reload();
+}}
+document.getElementById('confirm-btn')?.addEventListener('click', () => send('confirm'));
+document.getElementById('reject-btn')?.addEventListener('click', () => send('reject'));
+</script></body></html>"""
+        return self._html_response(html)
+
+    def _public_quote_action(self, path):
+        parts = [p for p in path.split("/") if p]
+        if len(parts) != 5 or parts[0] != "api" or parts[1] != "public" or parts[2] != "quotes":
+            return self._json_response({"error": "Not found"}, 404)
+        token = parts[3]
+        action = parts[4]
+        if action not in {"confirm", "reject"}:
+            return self._json_response({"error": "Not found"}, 404)
+        payload = self._read_json_body() or {}
+        name = str(payload.get("client_name") or "").strip()
+        email = str(payload.get("client_email") or "").strip()
+        phone = str(payload.get("client_phone") or "").strip()
+        note = str(payload.get("confirm_note") or "").strip()
+        if action == "confirm" and not name:
+            return self._json_response({"error": "Name is required"}, 400)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM estimates WHERE public_token=?", (token,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return self._json_response({"error": "Quote not found"}, 404)
+        estimate = row_to_dict(row)
+        current = self._estimate_confirm_status_key(estimate.get("confirm_status") or estimate.get("status"))
+        if current not in {"sent"}:
+            conn.close()
+            return self._json_response({"error": f"Quote is not waiting for customer response: {current}"}, 400)
+        target = "confirmed" if action == "confirm" else "rejected"
+        ts = now_ts()
+        ip = self.client_address[0] if self.client_address else ""
+        ua = self.headers.get("User-Agent", "")
+        full_note = note
+        if action == "confirm":
+            full_note = (note + "\n" if note else "") + f"Client confirmed via public quote page: {name}"
+        cur.execute(
+            """
+            UPDATE estimates
+            SET confirm_status=?, status=?, confirmed_at=?,
+                confirmed_by=NULL, confirm_note=CASE WHEN ?<>'' THEN ? ELSE confirm_note END,
+                client_action_at=?, client_name=?, client_email=?, client_phone=?,
+                client_ip=?, client_user_agent=?, updated_at=?
+            WHERE id=?
+            """,
+            (
+                target,
+                self._estimate_legacy_status(target),
+                ts if target == "confirmed" else estimate.get("confirmed_at"),
+                full_note,
+                full_note,
+                ts,
+                name,
+                email,
+                phone,
+                ip,
+                ua,
+                ts,
+                estimate["id"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return self._json_response({"ok": True, "status": target})
 
     def _handle_contract_pdf(self, path, user, query):
         parts = [p for p in path.split("/") if p]

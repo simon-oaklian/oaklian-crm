@@ -93,9 +93,10 @@
     buttons.push(`<span class="ev2-status ev2-status-${escHtml(status)}">${escHtml(statusLabel(status))}</span>`);
     if (status === "draft") {
       buttons.push(`<button class="ev2-btn" id="ev2-mark-sent">${tt("ev2_btn_send_to_customer", "发送给客户")}</button>`);
-      buttons.push(`<span class="ev2-mini">${tt("ev2_send_customer_hint", "当前版本将进入已发送状态；客户确认网页和邮箱/短信发送稍后接入。")}</span>`);
+      buttons.push(`<span class="ev2-mini">${tt("ev2_send_customer_hint", "生成客户确认链接；邮箱/短信发送后续接入。")}</span>`);
     }
     if (status === "sent") {
+      buttons.push(`<button class="ev2-btn" id="ev2-copy-public-link">${tt("ev2_btn_quote_link", "客户链接")}</button>`);
       buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-mark-confirmed">${tt("ev2_btn_customer_confirm", "客户确认")}</button>`);
       buttons.push(`<button class="ev2-btn ev2-btn-danger" id="ev2-mark-rejected">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>`);
     }
@@ -357,7 +358,7 @@
       const linkedMismatch = Number(r.linked_contract_mismatch || 0) === 1;
       const noCustomer = !Number(r.customer_id || 0);
       const flowButtons = [
-        status === "draft" ? `<button class="ev2-btn-mini" data-act="mark-sent" data-id="${r.id}">${tt("ev2_btn_send_to_customer", "发送给客户")}</button>` : "",
+        status === "draft" || status === "sent" ? `<button class="ev2-btn-mini" data-act="send-customer" data-id="${r.id}">${status === "sent" ? tt("ev2_btn_quote_link", "客户链接") : tt("ev2_btn_send_to_customer", "发送给客户")}</button>` : "",
         status === "sent" ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="mark-confirmed" data-id="${r.id}">${tt("ev2_btn_customer_confirm", "客户确认")}</button>` : "",
         status === "sent" ? `<button class="ev2-btn-mini ev2-btn-danger" data-act="mark-rejected" data-id="${r.id}">${tt("ev2_btn_customer_reject", "客户拒绝")}</button>` : "",
         status === "confirmed" && !r.linked_contract_id
@@ -393,13 +394,34 @@
         if (btn.dataset.act === "edit") openEstimateEditor(id);
         else if (btn.dataset.act === "pdf") openPdfDialog(id);
         else if (btn.dataset.act === "delete") onDeleteQuote(id);
-        else if (btn.dataset.act === "mark-sent") markEstimateStatus(id, "sent");
+        else if (btn.dataset.act === "send-customer") sendEstimateToCustomer(id);
         else if (btn.dataset.act === "mark-confirmed") markEstimateStatus(id, "confirmed");
         else if (btn.dataset.act === "mark-rejected") markEstimateStatus(id, "rejected");
         else if (btn.dataset.act === "gen-contract") generateContractFromEstimate(id);
         else if (btn.dataset.act === "view-contract") openLinkedContract(btn.dataset.contractId);
       });
     });
+  }
+
+  function showCustomerQuoteLink(publicUrl) {
+    if (!publicUrl) return;
+    const url = publicUrl.startsWith("http") ? publicUrl : `${window.location.origin}${publicUrl}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    window.prompt(tt("ev2_public_quote_link", "客户确认链接"), url);
+  }
+
+  async function sendEstimateToCustomer(id, reopenEditor = false) {
+    try {
+      const res = await api(`/api/estimates/${id}/send-to-customer`, { method: "POST" });
+      toast(tt("ev2_quote_sent_link_ready", "客户确认链接已生成"), "success");
+      showCustomerQuoteLink(res && (res.public_url || (res.row && res.row.public_url)));
+      if (reopenEditor) await openEstimateEditor(id);
+      else await renderQuotesTab($("#ev2-tab-content"));
+    } catch (e) {
+      toast(tt("ev2_flow_failed_prefix", "流程操作失败: ") + e.message, "error");
+    }
   }
 
   async function markEstimateStatus(id, target) {
@@ -446,7 +468,11 @@
   function bindFlowButtons() {
     const est = ev2.currentEstimate;
     if (!est) return;
-    $("#ev2-mark-sent")?.addEventListener("click", () => markEstimateStatusFromEditor("sent"));
+    $("#ev2-mark-sent")?.addEventListener("click", () => sendEstimateToCustomer(est.id, true));
+    $("#ev2-copy-public-link")?.addEventListener("click", () => {
+      if (est.public_url) showCustomerQuoteLink(est.public_url);
+      else sendEstimateToCustomer(est.id, true);
+    });
     $("#ev2-mark-confirmed")?.addEventListener("click", () => markEstimateStatusFromEditor("confirmed"));
     $("#ev2-mark-rejected")?.addEventListener("click", () => markEstimateStatusFromEditor("rejected"));
     $("#ev2-generate-contract")?.addEventListener("click", () => generateContractFromEstimate(est.id));
@@ -456,6 +482,10 @@
   async function markEstimateStatusFromEditor(target) {
     const est = ev2.currentEstimate;
     if (!est) return;
+    if (target === "sent") {
+      await sendEstimateToCustomer(est.id, true);
+      return;
+    }
     const endpoint = {
       sent: "mark-sent",
       confirmed: "mark-confirmed",
