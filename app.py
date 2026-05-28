@@ -1986,6 +1986,32 @@ def init_db():
             (setting_key, str(default_value), setting_group, now_ts()),
         )
     cur.execute("UPDATE system_settings SET setting_group='company' WHERE setting_group IS NULL OR TRIM(setting_group)=''")
+    cur.execute(
+        """
+        INSERT INTO system_settings(setting_key,setting_value,setting_group,updated_at,updated_by)
+        SELECT 'company_logo_dark', logo_horizontal_url, 'company', ?, NULL
+        FROM company_settings
+        WHERE id=1 AND COALESCE(TRIM(logo_horizontal_url),'')<>''
+        ON CONFLICT(setting_key) DO UPDATE SET
+            setting_value=excluded.setting_value,
+            setting_group=excluded.setting_group,
+            updated_at=excluded.updated_at
+        """,
+        (now_ts(),),
+    )
+    cur.execute(
+        """
+        INSERT INTO system_settings(setting_key,setting_value,setting_group,updated_at,updated_by)
+        SELECT 'company_logo_light', logo_icon_url, 'company', ?, NULL
+        FROM company_settings
+        WHERE id=1 AND COALESCE(TRIM(logo_icon_url),'')<>''
+        ON CONFLICT(setting_key) DO UPDATE SET
+            setting_value=excluded.setting_value,
+            setting_group=excluded.setting_group,
+            updated_at=excluded.updated_at
+        """,
+        (now_ts(),),
+    )
 
     cur.execute("SELECT id,modules_json FROM users WHERE role='manager'")
     manager_rows = cur.fetchall()
@@ -3068,6 +3094,43 @@ class CRMHandler(BaseHTTPRequestHandler):
         if isinstance(raw, str):
             return raw.strip().lower() in {"1", "true", "yes", "on", "y"}
         return bool(raw)
+
+    def _upsert_system_setting(self, cur, setting_key, setting_value, setting_group="company", updated_by=None):
+        cur.execute(
+            """
+            INSERT INTO system_settings(setting_key,setting_value,setting_group,updated_at,updated_by)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value=excluded.setting_value,
+                setting_group=excluded.setting_group,
+                updated_at=excluded.updated_at,
+                updated_by=excluded.updated_by
+            """,
+            (setting_key, str(setting_value or ""), setting_group, now_ts(), updated_by),
+        )
+
+    def _sync_brand_logo_settings(self, cur, brand=None, updated_by=None):
+        brand = brand or self._read_company_settings(cur)
+        horizontal = str((brand or {}).get("logo_horizontal_url") or "").strip()
+        icon = str((brand or {}).get("logo_icon_url") or "").strip()
+        if horizontal:
+            self._upsert_system_setting(cur, "company_logo_dark", horizontal, "company", updated_by)
+        if icon:
+            self._upsert_system_setting(cur, "company_logo_light", icon, "company", updated_by)
+
+    def _brand_logo_urls(self, cur):
+        brand = self._read_company_settings(cur)
+        dark = str((brand or {}).get("logo_horizontal_url") or "").strip()
+        light = str((brand or {}).get("logo_icon_url") or "").strip()
+        if not dark:
+            dark = self._system_setting_text(cur, "company_logo_dark", "/assets/images/logo-oaklian-dark.png").strip()
+        if not light:
+            light = self._system_setting_text(cur, "company_logo_light", "/assets/images/logo-oaklian-light.png").strip()
+        return {
+            "dark": dark or "/assets/images/logo-oaklian-dark.png",
+            "light": light or "/assets/images/logo-oaklian-light.png",
+            "brand": brand,
+        }
 
     def _system_settings_get(self, query):
         group_raw = (query.get("group", [""])[0] or "").strip()
@@ -5547,8 +5610,9 @@ class CRMHandler(BaseHTTPRequestHandler):
                     now_ts(),
                 ),
             )
-        conn.commit()
         data = self._read_company_settings(cur)
+        self._sync_brand_logo_settings(cur, data, user.get("id"))
+        conn.commit()
         conn.close()
         return self._json_response({"ok": True, "slot": slot, "url": url, "mime_type": mime_type, "brand": data}, 201)
 
@@ -5658,8 +5722,10 @@ class CRMHandler(BaseHTTPRequestHandler):
                     now_ts(),
                 ),
             )
-        conn.commit()
         data = self._read_company_settings(cur)
+        current_user = self._current_user() or {}
+        self._sync_brand_logo_settings(cur, data, current_user.get("id"))
+        conn.commit()
         conn.close()
         return self._json_response(data)
 
@@ -10139,9 +10205,11 @@ class CRMHandler(BaseHTTPRequestHandler):
         conn = get_conn()
         cur = conn.cursor()
         print_settings = self._print_settings(cur)
+        logo_cfg = self._brand_logo_urls(cur)
         conn.close()
-        logo_url = (print_settings.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
-        company_name = (print_settings.get("company_name") or "Oaklian Builders").strip()
+        brand = logo_cfg.get("brand") or {}
+        logo_url = (logo_cfg.get("dark") or "/assets/images/logo-oaklian-dark.png").strip()
+        company_name = (print_settings.get("company_name") or brand.get("company_name") or "Oaklian Builders").strip()
         footer_text = (print_settings.get("company_footer_text") or "OAKLIAN Remodeling & Construction LLC").strip()
 
         def money(v):
@@ -10383,7 +10451,7 @@ document.getElementById('reject-btn')?.addEventListener('click', () => send('rej
 
         created_date = str(estimate.get("created_at") or now_ts())[:10]
         estimate_no = f"EST-{int(estimate_id):05d}"
-        logo_url = (print_cfg.get("company_logo_dark") or brand.get("logo_horizontal_url") or "/assets/images/logo-oaklian-dark.png").strip()
+        logo_url = (brand.get("logo_horizontal_url") or print_cfg.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
         company_name = (print_cfg.get("company_name") or brand.get("company_name") or "OAKLIAN REMODELING").strip()
         address = estimate.get("address") or estimate.get("customer_address") or ""
         doc_title = (tpl.get("title_text") or fallback_tpl.get("title_text") or txt["estimate_title"]).strip()
@@ -10547,7 +10615,7 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
                 return "$0.00"
 
         created_date = str(contract.get("created_at") or now_ts())[:10]
-        logo_url = (print_cfg.get("company_logo_dark") or brand.get("logo_horizontal_url") or "/assets/images/logo-oaklian-dark.png").strip()
+        logo_url = (brand.get("logo_horizontal_url") or print_cfg.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
         company_name = (print_cfg.get("company_name") or brand.get("company_name") or "OAKLIAN REMODELING").strip()
         address = contract.get("address") or contract.get("project_address") or contract.get("customer_address") or ""
         doc_title = (tpl.get("title_text") or fallback_tpl.get("title_text") or txt["contract_title"]).strip()
@@ -10744,7 +10812,7 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         status_label = status_text.get(locale_key) or status_key
 
         created_date = str(co.get("created_at") or now_ts())[:10]
-        logo_url = (print_cfg.get("company_logo_dark") or brand.get("logo_horizontal_url") or "/assets/images/logo-oaklian-dark.png").strip()
+        logo_url = (brand.get("logo_horizontal_url") or print_cfg.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
         company_name = (print_cfg.get("company_name") or brand.get("company_name") or "OAKLIAN REMODELING").strip()
         order_no = co.get("order_no") or f"CO-{int(change_order_id):05d}"
         address = co.get("project_address") or co.get("customer_address") or ""
