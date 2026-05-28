@@ -365,6 +365,14 @@ def _build_css(brand):
     page-break-after: avoid;
     break-after: avoid;
   }}
+  .pdf-block {{
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }}
+  .details-block {{
+    page-break-inside: auto;
+    break-inside: auto;
+  }}
   .section-body {{
     /* 不要左右竖线(打印时显示难看) */
     border-bottom: 1px solid #ddd;
@@ -405,9 +413,21 @@ def _build_css(brand):
     margin: 0 0 4px 0;
     font-size: 10.5px;
   }}
+  .estimate-section-block {{
+    page-break-inside: auto;
+    break-inside: auto;
+  }}
   table.lines-tbl thead {{
     /* 表格跨页时表头自动重复 */
     display: table-header-group;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: avoid;
+    break-after: avoid;
+  }}
+  table.lines-tbl tbody {{
+    page-break-inside: auto;
+    break-inside: auto;
   }}
   table.lines-tbl th {{
     background: {light_bg};
@@ -434,6 +454,14 @@ def _build_css(brand):
     page-break-inside: avoid;
     break-inside: avoid;
   }}
+  table.lines-tbl tr.first-line {{
+    page-break-before: avoid;
+    break-before: avoid;
+  }}
+  table.lines-tbl tr.keep-with-subtotal {{
+    page-break-after: avoid;
+    break-after: avoid;
+  }}
   table.lines-tbl tr.subtotal-row td {{
     background: {light_bg};
     font-weight: 600;
@@ -444,6 +472,8 @@ def _build_css(brand):
   table.lines-tbl tr.subtotal-row {{
     page-break-before: avoid;
     break-before: avoid;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }}
   .item-name {{
     font-weight: 500;
@@ -493,8 +523,8 @@ def _build_css(brand):
     font-weight: 600;
     color: {primary};
   }}
-  /* 总价表 + 付款进度块 各自整块不被切到两页 */
-  .summary-block, .payment-block {{
+  /* 短块尽量整块换页,不要把标题留在上一页 */
+  .summary-block, .payment-block, .remarks-block, .customer-block {{
     page-break-inside: avoid;
     break-inside: avoid;
   }}
@@ -507,6 +537,10 @@ def _build_css(brand):
   }}
   table.pay-tbl thead {{
     display: table-header-group;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: avoid;
+    break-after: avoid;
   }}
   table.pay-tbl th {{
     background: {light_bg};
@@ -541,6 +575,9 @@ def _build_css(brand):
     padding-left: 18px;
     font-size: 10px;
     color: #555;
+  }}
+  .remarks-block h2.section-title {{
+    margin-top: 8px;
   }}
   .remarks li {{ margin-bottom: 3px; page-break-inside: avoid; break-inside: avoid; }}
 
@@ -706,6 +743,36 @@ def _build_css(brand):
 
     h2.section-title {{ break-after: avoid; }}
     .est-section-title {{ break-after: avoid; }}
+    .pdf-block, .summary-block, .payment-block, .remarks-block, .customer-block {{
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .details-block, .estimate-section-block {{
+      break-inside: auto;
+      page-break-inside: auto;
+    }}
+    table.lines-tbl thead,
+    table.pay-tbl thead {{
+      break-inside: avoid;
+      page-break-inside: avoid;
+      break-after: avoid;
+      page-break-after: avoid;
+    }}
+    table.lines-tbl tr,
+    table.pay-tbl tr {{
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    table.lines-tbl tr.keep-with-subtotal {{
+      break-after: avoid;
+      page-break-after: avoid;
+    }}
+    table.lines-tbl tr.subtotal-row {{
+      break-before: avoid;
+      page-break-before: avoid;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
     table {{ break-inside: auto; }}
   }}
 
@@ -801,6 +868,7 @@ def _render_customer(est, lang):
     else:
         type_label = _L(lang, "type_renovation")
     return f"""
+    <div class="customer-block pdf-block">
     <h2 class="section-title">{_L(lang, 'customer_info')}</h2>
     <div class="section-body">
       <div class="customer-grid">
@@ -811,6 +879,7 @@ def _render_customer(est, lang):
         <div><b>{_L(lang, 'estimate_type')}:</b>{type_label}</div>
       </div>
     </div>
+    </div>
     """
 
 
@@ -818,8 +887,10 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
     sections = est.get("sections") or []
     if not sections:
         return f"""
+        <div class="details-block">
         <h2 class="section-title">{_L(lang, 'details')}</h2>
         <div class="section-body"><i style="color:#888">— No items —</i></div>
+        </div>
         """
     # 决定要显示哪些列
     # show_unit_price 是总开关:关掉时强制材料和人工都不显示
@@ -862,17 +933,24 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
     headers.append(f"<th class='num' style='width:{col_widths[col_idx]}'>{_L(lang, 'line_subtotal')}</th>")
     header_html = f"<thead><tr>{''.join(headers)}</tr></thead>"
 
-    parts = [f"<h2 class='section-title'>{_L(lang, 'details')}</h2>", "<div class='section-body'>"]
+    parts = [
+        "<div class='details-block'>",
+        f"<h2 class='section-title'>{_L(lang, 'details')}</h2>",
+        "<div class='section-body'>",
+    ]
     for sec in sections:
         sec_zh = sec.get("name") or sec.get("section_name_zh") or ""
         sec_en = sec.get("section_name_en") or ""
         sec_label = _label_with_translation(sec_zh, sec_en, lang)
+        lines = sec.get("lines") or []
+        last_line_idx = len(lines) - 1
+        parts.append("<div class='estimate-section-block'>")
         parts.append(f"<div class='est-section-title'>{sec_label}</div>")
         parts.append("<table class='lines-tbl'>")
         parts.append(header_html)
         parts.append("<tbody>")
 
-        for ln in sec.get("lines") or []:
+        for line_idx, ln in enumerate(lines):
             name = _esc(ln.get("item_name") or "-")
             desc = _esc(ln.get("description") or "")
             qty = float(ln.get("quantity") or 0)
@@ -896,7 +974,13 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
             if show_unit_price:
                 cells.append(f"<td class='num'>{_money(unit_price)}</td>")
             cells.append(f"<td class='num'>{_money(sub)}</td>")
-            parts.append("<tr>" + "".join(cells) + "</tr>")
+            row_classes = []
+            if line_idx == 0:
+                row_classes.append("first-line")
+            if line_idx == last_line_idx:
+                row_classes.append("keep-with-subtotal")
+            cls = f" class='{' '.join(row_classes)}'" if row_classes else ""
+            parts.append(f"<tr{cls}>" + "".join(cells) + "</tr>")
 
         # 分区合计行
         sec_subtotal = float(sec.get("section_subtotal") or 0)
@@ -908,8 +992,8 @@ def _render_renovation_details(est, lang, show_unit_price, show_material, show_l
             <td class='num'>{_money(sec_subtotal)}</td>
           </tr>
         """)
-        parts.append("</tbody></table>")
-    parts.append("</div>")
+        parts.append("</tbody></table></div>")
+    parts.append("</div></div>")
     return "\n".join(parts)
 
 
@@ -920,6 +1004,7 @@ def _render_rebuild_details(est, lang):
     main_total = base_unit * sqft
     addons = est.get("addons") or []
     parts = [
+        "<div class='details-block'>",
         f"<h2 class='section-title'>{_L(lang, 'details')}</h2>",
         "<div class='section-body'>",
         "<div class='rebuild-summary'>",
@@ -927,6 +1012,7 @@ def _render_rebuild_details(est, lang):
         "</div>",
     ]
     if addons:
+        parts.append("<div class='estimate-section-block'>")
         parts.append(f"<div class='est-section-title'>{_L(lang, 'rebuild_addons')}</div>")
         parts.append("<table class='lines-tbl'>")
         parts.append(f"""
@@ -939,9 +1025,16 @@ def _render_rebuild_details(est, lang):
           </tr></thead>
           <tbody>
         """)
-        for a in addons:
+        last_addon_idx = len(addons) - 1
+        for addon_idx, a in enumerate(addons):
+            row_classes = []
+            if addon_idx == 0:
+                row_classes.append("first-line")
+            if addon_idx == last_addon_idx:
+                row_classes.append("keep-with-subtotal")
+            cls = f" class='{' '.join(row_classes)}'" if row_classes else ""
             parts.append(f"""
-            <tr>
+            <tr{cls}>
               <td><div class='item-name'>{_esc(a.get('name'))}</div></td>
               <td>{_esc(a.get('description') or '')}</td>
               <td class='num'>{float(a.get('quantity') or 0):g}</td>
@@ -949,8 +1042,8 @@ def _render_rebuild_details(est, lang):
               <td class='num'>{_money(a.get('addon_subtotal') or 0)}</td>
             </tr>
             """)
-        parts.append("</tbody></table>")
-    parts.append("</div>")
+        parts.append("</tbody></table></div>")
+    parts.append("</div></div>")
     return "\n".join(parts)
 
 
@@ -1057,13 +1150,17 @@ def _render_remarks(est, lang):
         for zh, en in zip(remarks, en_remarks):
             items.append(f"<li>{_esc(zh)}<br><span style='color:#999;font-size:9.5px'>{_esc(en)}</span></li>")
         return f"""
+        <div class="remarks-block pdf-block">
         <h2 class='section-title'>{_L(lang, 'remarks')}</h2>
         <div class='section-body remarks'><ul>{''.join(items)}</ul></div>
+        </div>
         """
     return f"""
+    <div class="remarks-block pdf-block">
     <h2 class='section-title'>{_L(lang, 'remarks')}</h2>
     <div class='section-body remarks'>
       <ul>{''.join(f'<li>{_esc(r)}</li>' for r in remarks)}</ul>
+    </div>
     </div>
     """
 
