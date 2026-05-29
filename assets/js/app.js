@@ -465,6 +465,7 @@ const I18N = {
     mark_rejected: "标记已拒绝",
     can_generate_contract_hint: "可生成合同",
     can_generate_project_hint: "可生成项目 / 开始施工",
+    contract_sign_before_project: "合同签署后可生成项目/工地",
     open_change_order_module: "查看变更单模块",
     payment_milestones: "付款节点计划",
     milestone_name: "节点名称",
@@ -1343,6 +1344,7 @@ const I18N = {
     mark_rejected: "Mark Rejected",
     can_generate_contract_hint: "Ready to Generate Contract",
     can_generate_project_hint: "Ready to Generate Project / Start Construction",
+    contract_sign_before_project: "Generate project after contract is signed",
     open_change_order_module: "Open Change Order Module",
     payment_milestones: "Payment Milestones",
     milestone_name: "Milestone Name",
@@ -2221,6 +2223,7 @@ const I18N = {
     mark_rejected: "Marcar rechazado",
     can_generate_contract_hint: "Listo para generar contrato",
     can_generate_project_hint: "Listo para generar proyecto / iniciar obra",
+    contract_sign_before_project: "Generar proyecto después de firmar el contrato",
     open_change_order_module: "Abrir módulo de cambios",
     payment_milestones: "Hitos de pago",
     milestone_name: "Nombre del hito",
@@ -5949,7 +5952,9 @@ function renderContractActionGroup(r) {
   const projectId = r.linked_project_id || r.project_id;
   const projectAction = projectId
     ? `<button data-act="view-project" data-id="${r.id}" data-project-id="${projectId}" class="secondary">${t("view_project")}</button>`
-    : `<button data-act="gen-project" data-id="${r.id}" class="secondary">${t("generate_project")}</button>`;
+    : signStatus === "signed"
+      ? `<button data-act="gen-project" data-id="${r.id}" class="secondary">${t("generate_project")}</button>`
+      : `<span class="inline-badge">${t("contract_sign_before_project")}</span>`;
   let mainAction = "";
   const secondaryActions = [];
 
@@ -7616,6 +7621,7 @@ async function renderRecordLinkPanel(module, row = null) {
   } else if (module === "contracts") {
     let linkedProjectId = row.linked_project_id ? Number(row.linked_project_id) : (row.project_id ? Number(row.project_id) : null);
     let linkedProjectName = row.linked_project_name || "";
+    const signStatus = normalizeEnum(row.sign_status || "draft");
     if (!linkedProjectId && can("projects")) {
       try {
         const projects = await api("/api/projects");
@@ -7645,9 +7651,9 @@ async function renderRecordLinkPanel(module, row = null) {
           <div>${esc(row.contract_no || "-")} / ${esc(row.title || "-")}</div>
           <div>${fieldLabel("sign_status")}：<span class="co-status-pill ${approvalStatusClass(row.sign_status, "contract")}">${displayValue("sign_status", row.sign_status || "draft")}</span></div>
           <div class="row gap" style="margin-top:6px;">
-            ${normalizeEnum(row.sign_status || "draft") === "draft" ? `<button data-rel-act="contract-mark-sent" data-contract-id="${row.id}" class="secondary">${t("mark_sent")}</button>` : ""}
-            ${normalizeEnum(row.sign_status || "draft") === "sent" ? `<button data-rel-act="contract-mark-signed" data-contract-id="${row.id}">${t("mark_signed")}</button>` : ""}
-            ${normalizeEnum(row.sign_status || "draft") === "signed" ? `<span class="inline-badge">${t("can_generate_project_hint")}</span>` : ""}
+            ${signStatus === "draft" ? `<button data-rel-act="contract-mark-sent" data-contract-id="${row.id}" class="secondary">${t("mark_sent")}</button>` : ""}
+            ${signStatus === "sent" ? `<button data-rel-act="contract-mark-signed" data-contract-id="${row.id}">${t("mark_signed")}</button>` : ""}
+            ${signStatus === "signed" ? `<span class="inline-badge">${t("can_generate_project_hint")}</span>` : ""}
           </div>
         </div>
         <div class="list-item">
@@ -7663,7 +7669,9 @@ async function renderRecordLinkPanel(module, row = null) {
           <div class="row gap" style="margin-top:6px;">
             ${linkedProjectId
               ? `<button data-rel-act="view-project" data-project-id="${linkedProjectId}" class="secondary">${t("view_project")}</button>`
-              : `<button data-rel-act="generate-project" data-contract-id="${row.id}">${t("generate_project")}</button>`}
+              : signStatus === "signed"
+                ? `<button data-rel-act="generate-project" data-contract-id="${row.id}">${t("generate_project")}</button>`
+                : `<span class="inline-badge">${t("contract_sign_before_project")}</span>`}
           </div>
         </div>
         <div class="list-item">

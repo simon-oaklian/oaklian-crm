@@ -4463,8 +4463,6 @@ class CRMHandler(BaseHTTPRequestHandler):
             ts_existing = now_ts()
             if not estimate["contract_id"]:
                 cur.execute("UPDATE estimates SET contract_id=?, updated_at=? WHERE id=?", (existed["id"], ts_existing, estimate_id))
-            if estimate["customer_id"]:
-                cur.execute("UPDATE customers SET status=?, updated_at=? WHERE id=?", ("已签约", ts_existing, estimate["customer_id"]))
             conn.commit()
             row = row_to_dict(existed)
             self._enrich_resource_rows(cur, "contracts", [row])
@@ -4521,8 +4519,6 @@ class CRMHandler(BaseHTTPRequestHandler):
                 (contract_id, estimate_id, ts, project_id),
             )
             self._recalc_designer_commission_for_project(cur, project_id)
-        if estimate["customer_id"]:
-            cur.execute("UPDATE customers SET status=?, updated_at=? WHERE id=?", ("已签约", ts, estimate["customer_id"]))
         self._evaluate_contract_payment_milestones(cur, contract_id=contract_id, project_id=project_id)
         conn.commit()
         cur.execute("SELECT * FROM contracts WHERE id=?", (contract_id,))
@@ -4641,6 +4637,11 @@ class CRMHandler(BaseHTTPRequestHandler):
             conn.commit()
             conn.close()
             return self._json_response({"created": False, "project": project})
+
+        sign_status = self._contract_sign_status_key(contract["sign_status"] or contract["signed_status"])
+        if sign_status != "signed":
+            conn.close()
+            return self._json_response({"error": "Contract must be signed before generating a project"}, 400)
 
         ts = now_ts()
         customer_id = contract["customer_id"] or contract["estimate_customer_id"]
@@ -7418,6 +7419,8 @@ class CRMHandler(BaseHTTPRequestHandler):
             ),
         )
         self._evaluate_contract_payment_milestones(cur, contract_id=contract_id, project_id=project_id)
+        if target == "signed" and existing.get("customer_id"):
+            cur.execute("UPDATE customers SET status=?, updated_at=? WHERE id=?", ("已签约", ts, existing["customer_id"]))
         if project_id:
             self._recalc_designer_commission_for_project(cur, project_id)
         conn.commit()
@@ -9913,6 +9916,10 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "change_order_title": "变更单",
                 "customer": "客户",
                 "project": "项目",
+                "details": "施工范围 / 明细",
+                "line_description": "描述",
+                "unit": "单位",
+                "unit_price": "单价",
                 "estimate_no": "报价编号",
                 "contract_no": "合同编号",
                 "change_order_no": "变更单编号",
@@ -9959,6 +9966,10 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "change_order_title": "Orden de cambio",
                 "customer": "Cliente",
                 "project": "Proyecto",
+                "details": "Alcance / Detalles",
+                "line_description": "Descripción",
+                "unit": "Unidad",
+                "unit_price": "Precio unitario",
                 "estimate_no": "No. Presupuesto",
                 "contract_no": "No. Contrato",
                 "change_order_no": "No. Orden de cambio",
@@ -10005,6 +10016,10 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "change_order_title": "Change Order",
                 "customer": "Customer",
                 "project": "Project",
+                "details": "Scope / Details",
+                "line_description": "Description",
+                "unit": "Unit",
+                "unit_price": "Unit Price",
                 "estimate_no": "Estimate No.",
                 "contract_no": "Contract No.",
                 "change_order_no": "Change Order No.",
@@ -10672,7 +10687,57 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
                         "amount": amount_due,
                     }
                 )
+        section_rows = []
+        if contract.get("estimate_id"):
+            cur.execute("SELECT * FROM estimate_sections WHERE estimate_id=? ORDER BY sort_order,id", (contract["estimate_id"],))
+            for sec in cur.fetchall():
+                sec_dict = row_to_dict(sec)
+                cur.execute("SELECT * FROM estimate_lines WHERE section_id=? ORDER BY sort_order,id", (sec_dict["id"],))
+                sec_dict["lines"] = [row_to_dict(x) for x in cur.fetchall()]
+                section_rows.append(sec_dict)
+        if not section_rows and contract.get("estimate_id"):
+            cur.execute("SELECT line_items_json FROM estimates WHERE id=?", (contract["estimate_id"],))
+            est_row = cur.fetchone()
+            try:
+                legacy_items = json.loads((est_row["line_items_json"] if est_row else "") or "[]")
+                if isinstance(legacy_items, list) and legacy_items:
+                    section_rows = [{"name": txt["details"], "lines": legacy_items}]
+            except (json.JSONDecodeError, AttributeError):
+                section_rows = []
         conn.close()
+
+        def num_value(value):
+            try:
+                return float(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        def line_qty(line):
+            return line.get("quantity") if line.get("quantity") is not None else line.get("qty")
+
+        scope_blocks = []
+        for sec in section_rows:
+            lines = sec.get("lines") or []
+            line_rows = "".join(
+                "<tr>"
+                f"<td>{html_escape(str(line.get('item_name') or line.get('item') or line.get('name') or '-'))}</td>"
+                f"<td>{html_escape(str(line.get('description') or ''))}</td>"
+                f"<td class='num'>{html_escape(str(line_qty(line) if line_qty(line) is not None else ''))}</td>"
+                f"<td class='center'>{html_escape(str(line.get('unit') or ''))}</td>"
+                f"<td class='num'>{money(line.get('unit_price') if line.get('unit_price') not in (None, '') else (num_value(line.get('material_cost')) + num_value(line.get('labor_cost'))))}</td>"
+                f"<td class='num'>{money(line.get('line_subtotal') if line.get('line_subtotal') not in (None, '') else line.get('subtotal'))}</td>"
+                "</tr>"
+                for line in lines
+            )
+            if not line_rows:
+                line_rows = f"<tr><td colspan='6'>{txt['no_line_items']}</td></tr>"
+            scope_blocks.append(
+                f"<section class='doc-section'><h3>{html_escape(str(sec.get('name_zh') or sec.get('name') or '-'))}</h3>"
+                "<table class='scope-table'><colgroup><col class='col-item'><col class='col-desc'><col class='col-qty'><col class='col-unit'><col class='col-price'><col class='col-total'></colgroup>"
+                f"<thead><tr><th>{txt['category']}</th><th>{txt['line_description']}</th><th class='num'>{txt['qty']}</th><th class='center'>{txt['unit']}</th><th class='num'>{txt['unit_price']}</th><th class='num'>{txt['subtotal']}</th></tr></thead>"
+                f"<tbody>{line_rows}</tbody></table></section>"
+            )
+        scope_html = "".join(scope_blocks) or f"<section class='doc-section'><h3>{txt['details']}</h3><table><tbody><tr><td>{txt['no_line_items']}</td></tr></tbody></table></section>"
 
         plan_rows = "".join(
             [
@@ -10696,18 +10761,31 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
 .toolbar{{max-width:210mm;margin:10px auto 0;display:flex;justify-content:flex-end;gap:8px}}
 .toolbar button{{border:1px solid #cbd5e1;background:#fff;padding:6px 12px;border-radius:8px;cursor:pointer}}
 .paper{{width:210mm;min-height:297mm;margin:8px auto 14px;background:#fff;padding:16mm;box-sizing:border-box;box-shadow:0 8px 24px rgba(2,6,23,.12)}}
-.head{{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid {brand.get('accent_color', '#A38A55')};padding-bottom:12px;margin-bottom:16px}}
-.logo{{max-height:64px;max-width:300px}}
-.title{{color:{brand.get('dark_color', '#0F172A')};font-size:26px;font-weight:700}}
-.meta{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}}
-.box{{border:1px solid #dbe4eb;border-radius:8px;padding:10px;line-height:1.5}}
+.head{{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start;border-bottom:2px solid #1f2937;padding-bottom:12px;margin-bottom:16px}}
+.brand-line{{display:flex;gap:14px;align-items:center}}
+.logo{{max-height:48px;max-width:180px;object-fit:contain}}
+.company{{color:{brand.get('dark_color', '#0F172A')};font-size:18px;font-weight:800;line-height:1.15}}
+.tagline{{color:#475569;font-size:12px;margin-top:2px}}
+.doc-title{{text-align:right}}
+.doc-title h1{{font-size:24px;margin:0 0 4px;color:#111827}}
+.doc-title div{{font-size:12px;line-height:1.45}}
+.meta{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0 18px}}
+.box{{border-top:3px solid #1f2937;background:#f8fafc;padding:10px 12px;line-height:1.55}}
+.box-title{{font-weight:800;margin-bottom:5px;color:#111827}}
+.doc-section{{break-inside:avoid;page-break-inside:avoid;margin:16px 0}}
+.doc-section h3{{border-left:4px solid #777;padding-left:8px;margin:0 0 9px;font-size:15px}}
 table{{width:100%;border-collapse:collapse;margin-top:10px}}
-th,td{{border:1px solid #dbe4eb;padding:8px;text-align:left;font-size:13px}}
-th{{background:{brand.get('light_bg', '#E2E8F0')}}}
-.tot{{margin-top:12px;display:grid;gap:5px;justify-content:end;text-align:right}}
-.notes{{margin-top:14px;border:1px solid #dbe4eb;border-radius:8px;padding:10px;min-height:68px}}
-.sign-grid{{margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}}
-.sign-box{{border-top:1px solid #94a3b8;padding-top:8px;min-height:46px}}
+th,td{{border-bottom:1px solid #e5e7eb;padding:7px 8px;text-align:left;font-size:12px;vertical-align:top}}
+th{{background:#f1f5f9;color:#111827;font-weight:800}}
+.num{{text-align:right}}
+.center{{text-align:center}}
+.col-item{{width:26%}}.col-desc{{width:34%}}.col-qty{{width:8%}}.col-unit{{width:8%}}.col-price{{width:12%}}.col-total{{width:12%}}
+.tot{{margin:14px 0 0 auto;width:44%;display:grid;gap:6px;text-align:right}}
+.tot-row{{display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding:4px 0}}
+.tot-row.total{{font-size:16px;font-weight:800;border-top:2px solid #111827;border-bottom:0;padding-top:8px}}
+.notes{{margin-top:12px;border-top:1px solid #d1d5db;padding:10px 0;min-height:42px;break-inside:avoid;page-break-inside:avoid}}
+.sign-grid{{margin-top:30px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;break-inside:avoid;page-break-inside:avoid}}
+.sign-box{{border-top:1px solid #64748b;padding-top:8px;min-height:42px;font-size:12px}}
 .muted{{color:#64748b;font-size:12px;margin-top:18px}}
 @media print{{
   body{{background:#fff}}
@@ -10719,37 +10797,47 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
 <div class="toolbar no-print"><button onclick="window.print()">{txt['print_doc']}</button></div>
 <div class="paper">
   <div class="head">
-    <div>
-      <div class="title">{html_escape(company_name)}</div>
-      <div>{html_escape(brand.get('tagline', ''))}</div>
+    <div class="brand-line">
+      {logo_html}
+      <div>
+        <div class="company">{html_escape(company_name)}</div>
+        <div class="tagline">{html_escape(brand.get('legal_name') or '')}</div>
+        <div class="tagline">{html_escape(brand.get('tagline', ''))}</div>
+      </div>
     </div>
-    {logo_html}
+    <div class="doc-title">
+      <h1>{html_escape(doc_title)}</h1>
+      <div><b>{txt['contract_no']}:</b> {html_escape(contract.get('contract_no') or '')}</div>
+      <div><b>{txt['date']}:</b> {html_escape(created_date)}</div>
+      <div><b>{txt['signed_status']}:</b> {html_escape(contract.get('signed_status') or '')}</div>
+    </div>
   </div>
-  <h2>{html_escape(doc_title)}</h2>
   {intro_html}
   <div class="meta">
     <div class="box">
-      <b>{txt['customer']}</b><br>
-      {html_escape(contract.get('customer_name') or '')}<br>
-      {txt['phone']}: {html_escape(contract.get('customer_phone') or '')}<br>
-      {html_escape(contract.get('customer_email') or '')}<br>
-      {txt['address']}: {html_escape(address)}
+      <div class="box-title">{txt['customer']}</div>
+      <div><b>{txt['customer']}:</b> {html_escape(contract.get('customer_name') or '')}</div>
+      <div><b>{txt['phone']}:</b> {html_escape(contract.get('customer_phone') or '')}</div>
+      <div><b>Email:</b> {html_escape(contract.get('customer_email') or '')}</div>
+      <div><b>{txt['address']}:</b> {html_escape(address)}</div>
     </div>
     <div class="box">
-      <b>{txt['project']}</b><br>
-      {html_escape(contract.get('project_name') or contract.get('title') or '')}<br>
-      {txt['contract_no']}: {html_escape(contract.get('contract_no') or '')}<br>
-      {txt['date']}: {html_escape(created_date)}<br>
-      {txt['signed_status']}: {html_escape(contract.get('signed_status') or '')}<br>
-      {txt['signed_date']}: {html_escape(contract.get('signed_date') or '')}
+      <div class="box-title">{txt['project']}</div>
+      <div><b>{txt['project']}:</b> {html_escape(contract.get('project_name') or contract.get('title') or '')}</div>
+      <div><b>{txt['contract_no']}:</b> {html_escape(contract.get('contract_no') or '')}</div>
+      <div><b>{txt['date']}:</b> {html_escape(created_date)}</div>
+      <div><b>{txt['signed_date']}:</b> {html_escape(contract.get('signed_date') or '')}</div>
     </div>
   </div>
+  {scope_html}
+  <section class="doc-section">
   <h3>{txt['payment_plan']}</h3>
   <table>
     <thead><tr><th>{txt['node']}</th><th>{txt['valid_until']}</th><th>{txt['amount']}</th></tr></thead>
     <tbody>{plan_rows}</tbody>
   </table>
-  <div class="tot"><div><b>{txt['total']}: {money(contract.get('total_amount'))}</b></div></div>
+  </section>
+  <div class="tot"><div class="tot-row total"><span>{txt['total']}</span><span>{money(contract.get('total_amount'))}</span></div></div>
   <div class="notes"><b>{txt['notes']}:</b><br>{html_escape(note_text)}</div>
   <div class="notes"><b>{txt['terms']}:</b><br>{html_escape(clause_text)}</div>
   <h3 style="margin-top:14px;">{txt['signature']}</h3>
