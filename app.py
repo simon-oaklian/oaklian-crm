@@ -10715,13 +10715,23 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         def line_qty(line):
             return line.get("quantity") if line.get("quantity") is not None else line.get("qty")
 
+        def localized_value(row, base_key):
+            if lang in {"en", "es"}:
+                value = row.get(f"{base_key}_{lang}")
+                if value not in (None, ""):
+                    return value
+            value = row.get(base_key)
+            if value not in (None, ""):
+                return value
+            return row.get(f"{base_key}_zh") or ""
+
         scope_blocks = []
         for sec in section_rows:
             lines = sec.get("lines") or []
             line_rows = "".join(
                 "<tr>"
-                f"<td>{html_escape(str(line.get('item_name') or line.get('item') or line.get('name') or '-'))}</td>"
-                f"<td>{html_escape(str(line.get('description') or ''))}</td>"
+                f"<td>{html_escape(str(localized_value(line, 'item_name') or line.get('item') or line.get('name') or '-'))}</td>"
+                f"<td>{html_escape(str(localized_value(line, 'description')))}</td>"
                 f"<td class='num'>{html_escape(str(line_qty(line) if line_qty(line) is not None else ''))}</td>"
                 f"<td class='center'>{html_escape(str(line.get('unit') or ''))}</td>"
                 f"<td class='num'>{money(line.get('unit_price') if line.get('unit_price') not in (None, '') else (num_value(line.get('material_cost')) + num_value(line.get('labor_cost'))))}</td>"
@@ -10732,7 +10742,7 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             if not line_rows:
                 line_rows = f"<tr><td colspan='6'>{txt['no_line_items']}</td></tr>"
             scope_blocks.append(
-                f"<section class='doc-section'><h3>{html_escape(str(sec.get('name_zh') or sec.get('name') or '-'))}</h3>"
+                f"<section class='doc-section'><h3>{html_escape(str(localized_value(sec, 'name') or '-'))}</h3>"
                 "<table class='scope-table'><colgroup><col class='col-item'><col class='col-desc'><col class='col-qty'><col class='col-unit'><col class='col-price'><col class='col-total'></colgroup>"
                 f"<thead><tr><th>{txt['category']}</th><th>{txt['line_description']}</th><th class='num'>{txt['qty']}</th><th class='center'>{txt['unit']}</th><th class='num'>{txt['unit_price']}</th><th class='num'>{txt['subtotal']}</th></tr></thead>"
                 f"<tbody>{line_rows}</tbody></table></section>"
