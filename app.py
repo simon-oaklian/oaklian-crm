@@ -3567,7 +3567,7 @@ class CRMHandler(BaseHTTPRequestHandler):
         if template_type == "contract":
             return {
                 "title_text": txt.get("contract_title"),
-                "intro_text": "",
+                "intro_text": txt.get("contract_intro_default"),
                 "note_text": "",
                 "terms_text": txt.get("contract_clause_default"),
                 "footer_text": txt.get("footer_note"),
@@ -10046,6 +10046,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "node": "Node",
                 "amount": "Amount",
                 "description": "Change Description",
+                "contract_summary": "Contract Summary",
                 "impact_payment_plan": "Impact Payment Plan",
                 "affect_designer_commission": "Affect Designer Commission",
                 "approved_at": "Approved At",
@@ -10058,6 +10059,9 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "no_payment_plan": "No payment plan",
                 "footer_note": "This estimate is issued for project communication and signing reference.",
                 "contract_clause_default": "This contract is executed upon mutual written confirmation.",
+                "contract_intro_default": "This contract defines the agreed project scope, schedule expectations, payment milestones, and signature requirements.",
+                "signature_note_default": "This contract becomes effective after both parties sign.",
+                "print_disclaimer_default": "This document is issued for project communication and contract confirmation.",
                 "estimate_note_default": "Thank you for your trust. Scope can be adjusted within validity period.",
             },
         }
@@ -10644,27 +10648,39 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             except (TypeError, ValueError):
                 return "$0.00"
 
+        def has_cjk(value):
+            return any("\u4e00" <= ch <= "\u9fff" for ch in str(value or ""))
+
+        def localized_template_text(value, fallback=""):
+            value = str(value or "").strip()
+            fallback = str(fallback or "").strip()
+            if not value:
+                return fallback
+            if lang != "zh" and has_cjk(value):
+                return fallback
+            return value
+
         created_date = str(contract.get("created_at") or now_ts())[:10]
         logo_url = (brand.get("logo_horizontal_url") or print_cfg.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
         company_name = (print_cfg.get("company_name") or brand.get("company_name") or "OAKLIAN REMODELING").strip()
         address = contract.get("address") or contract.get("project_address") or contract.get("customer_address") or ""
-        doc_title = (tpl.get("title_text") or fallback_tpl.get("title_text") or txt["contract_title"]).strip()
-        intro_text = (tpl.get("intro_text") or fallback_tpl.get("intro_text") or "").strip()
-        note_text = (tpl.get("note_text") or fallback_tpl.get("note_text") or "").strip()
-        clause_text = (contract.get("notes") or "").strip() or (tpl.get("terms_text") or fallback_tpl.get("terms_text") or txt["contract_clause_default"]).strip()
-        footer_text = (tpl.get("footer_text") or fallback_tpl.get("footer_text") or txt["footer_note"]).strip()
+        doc_title = localized_template_text(tpl.get("title_text"), fallback_tpl.get("title_text") or txt["contract_title"])
+        intro_text = localized_template_text(tpl.get("intro_text"), fallback_tpl.get("intro_text") or "")
+        note_text = localized_template_text(tpl.get("note_text"), fallback_tpl.get("note_text") or "")
+        clause_text = localized_template_text(contract.get("notes"), "") or localized_template_text(tpl.get("terms_text"), fallback_tpl.get("terms_text") or txt["contract_clause_default"])
+        footer_text = localized_template_text(tpl.get("footer_text"), fallback_tpl.get("footer_text") or txt["footer_note"])
         footer_company = (print_cfg.get("company_footer_text") or print_cfg.get("print_footer_company_name") or brand.get("legal_name") or company_name).strip()
-        footer_disclaimer = (print_cfg.get("print_footer_disclaimer") or footer_text or txt["footer_note"]).strip()
+        footer_disclaimer = localized_template_text(print_cfg.get("print_footer_disclaimer"), footer_text or txt.get("print_disclaimer_default") or txt["footer_note"])
         footer_contact = (print_cfg.get("print_footer_contact") or "").strip()
         footer_license = (print_cfg.get("print_footer_license_no") or "").strip()
         show_logo = bool(print_cfg.get("print_show_logo"))
         show_signature_hint = bool(print_cfg.get("print_show_signature_hint"))
-        signature_hint_text = (print_cfg.get("default_signature_note") or "").strip()
+        signature_hint_text = localized_template_text(print_cfg.get("default_signature_note"), txt.get("signature_note_default") or "")
         footer_meta_parts = [x for x in [footer_company, footer_license, footer_contact] if x]
         footer_meta_line = " | ".join(footer_meta_parts)
         logo_html = """<img class="logo" src="{src}" onerror="this.style.display='none'" />""".format(src=html_escape(logo_url)) if show_logo and logo_url else ""
         signature_hint_html = f"<div class='muted'>{html_escape(signature_hint_text)}</div>" if show_signature_hint and signature_hint_text else ""
-        intro_html = f"<div class='notes'><b>{txt['description']}:</b><br>{html_escape(intro_text)}</div>" if intro_text else ""
+        intro_html = f"<div class='notes'><b>{txt.get('contract_summary', txt['description'])}:</b><br>{html_escape(intro_text)}</div>" if intro_text else ""
 
         try:
             plans = json.loads(contract.get("payment_plan_json") or "[]")
