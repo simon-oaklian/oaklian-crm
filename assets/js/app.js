@@ -3562,7 +3562,7 @@ function renderLogin() {
       const r = await api("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
       state.user = r.user;
       state.locale = state.user.language || "zh";
-      state.pdfLang = state.locale;
+      state.pdfLang = "en";
       state.brand = await api("/api/company/settings");
       applyBrand();
       q("#login-view").classList.add("hidden");
@@ -9508,7 +9508,7 @@ async function initApp() {
 
   q("#lang-select").addEventListener("change", async () => {
     state.locale = q("#lang-select").value;
-    state.pdfLang = state.locale;
+    state.pdfLang = "en";
     await api("/api/auth/me/language", { method: "PUT", body: JSON.stringify({ language: state.locale }) });
     renderApp();
   });
@@ -9523,7 +9523,7 @@ async function initApp() {
 
   state.user = me.user;
   state.locale = state.user.language || "zh";
-  state.pdfLang = state.locale;
+  state.pdfLang = "en";
   state.brand = me.brand || state.brand;
   applyBrand();
   const mods = availableModules();

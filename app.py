@@ -484,7 +484,7 @@ SYSTEM_SETTINGS_DEFAULTS = {
     "default_estimate_template_other": ("documents", ""),
     "default_contract_template_other": ("documents", ""),
     "default_change_order_template_other": ("documents", ""),
-    "default_print_language": ("documents", "zh"),
+    "default_print_language": ("documents", "en"),
     "default_terms_notice": ("documents", "未尽事项请以双方书面补充条款为准。"),
     "default_signature_note": ("documents", "请双方签字后生效。"),
     "notify_followup_due_enabled": ("notifications", "1"),
@@ -10072,9 +10072,9 @@ class CRMHandler(BaseHTTPRequestHandler):
         if not lang:
             conn = get_conn()
             cur = conn.cursor()
-            lang = normalize_key(self._system_setting_text(cur, "default_print_language", "zh"))
+            lang = normalize_key(self._system_setting_text(cur, "default_print_language", "en"))
             conn.close()
-        return lang if lang in {"zh", "en", "es"} else "zh"
+        return lang if lang in {"zh", "en", "es"} else "en"
 
     def _print_settings(self, cur):
         return {
