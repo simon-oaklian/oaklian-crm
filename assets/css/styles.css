@@ -1382,8 +1382,8 @@ button:active:not(:disabled),
 
 @media (max-width: 1024px) {
   .layout { grid-template-columns: 1fr; height: auto; overflow: visible; }
-  .sidebar { height: auto; overflow: visible; }
-  .menu { overflow: visible; padding-right: 0; }
+  .sidebar { height: 100vh; min-height: 0; }
+  .menu { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
   .content { height: auto; overflow: visible; }
   .grid-main { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }

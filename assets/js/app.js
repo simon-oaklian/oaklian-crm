@@ -3623,6 +3623,14 @@ function navParentLabelKey(groupKey) {
   if (groupKey === "designers_group") return "nav_designers_parent";
   return groupKey;
 }
+function scrollNavParentIntoView(groupKey) {
+  requestAnimationFrame(() => {
+    const parent = q('.menu-parent[data-parent="' + groupKey + '"]');
+    const children = parent && parent.querySelector(".menu-children");
+    if (!children) return;
+    children.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+}
 function renderMenu() {
   const menu = q("#menu");
   const mods = availableModules();
@@ -3657,8 +3665,10 @@ function renderMenu() {
       // parent group key -> toggle collapse, do not switch module
       if (typeof NAV_PARENT_GROUPS !== "undefined" && NAV_PARENT_GROUPS[key]) {
         const cur = navParentExpanded(key);
-        setNavParentExpanded(key, !cur);
+        const next = !cur;
+        setNavParentExpanded(key, next);
         renderMenu();
+        if (next) scrollNavParentIntoView(key);
         return;
       }
       closeNotificationPopover();
