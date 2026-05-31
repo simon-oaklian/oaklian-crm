@@ -10271,11 +10271,17 @@ class CRMHandler(BaseHTTPRequestHandler):
                 f"<thead><tr><th>Item</th><th>Description</th><th class='num'>Qty</th><th class='center'>Unit</th><th class='num'>Subtotal</th></tr></thead>"
                 f"<tbody>{line_rows}</tbody></table></section>"
             )
-        ms_html = "".join(
-            f"<tr><td>{esc(m.get('name'))}</td><td>{esc(m.get('custom_stage_name') or m.get('stage_step_name') or '')}</td>"
-            f"<td class='num'>{float(m.get('amount_pct') or 0):.1f}%</td></tr>"
-            for m in milestones
-        ) or "<tr><td colspan='3'>-</td></tr>"
+        payment_html = ""
+        if milestones:
+            ms_html = "".join(
+                f"<tr><td>{esc(m.get('name'))}</td><td>{esc(m.get('custom_stage_name') or m.get('stage_step_name') or '')}</td>"
+                f"<td class='num'>{float(m.get('amount_pct') or 0):.1f}%</td></tr>"
+                for m in milestones
+            )
+            payment_html = (
+                f"<h2>{labels['payment']}</h2>"
+                f"<table><thead><tr><th>Name</th><th>Stage</th><th>Percent</th></tr></thead><tbody>{ms_html}</tbody></table>"
+            )
         processed = self._estimate_confirm_status_key(estimate.get("confirm_status")) in {"confirmed", "rejected"}
         if processed:
             form_html = f"<div class='notice'>{labels['already']} {labels['status']}: {esc(estimate.get('confirm_status'))}</div>"
@@ -10296,8 +10302,12 @@ class CRMHandler(BaseHTTPRequestHandler):
             <input type="hidden" name="client_name" value="{esc(estimate.get('customer_name') or '')}">
           </form>
         """
+        pdf_cache_buster = int(datetime.now().timestamp())
         html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>{labels['title']} #{estimate['id']}</title>
 <style>
 body{{margin:0;background:#e8ebf0;color:#1d2433;font-family:Arial,'Microsoft YaHei',sans-serif}}
@@ -10329,9 +10339,9 @@ label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:b
 <div><h1>{labels['title']}</h1><div>{labels['estimate']} #{int(estimate['id']):05d}</div><div>{esc(estimate.get('updated_at'))}</div></div></div>
 <h2>{labels['customer']}</h2><div class="grid"><div><b>Name:</b> {esc(estimate.get('customer_name'))}</div><div><b>Phone:</b> {esc(estimate.get('customer_phone'))}</div>
 <div><b>Address:</b> {esc(estimate.get('address') or estimate.get('customer_address'))}</div><div><b>Project:</b> {esc(estimate.get('title'))}</div></div>
-<p class="download"><a href="/api/v2/estimates/{estimate['id']}/pdf?lang={lang}" target="_blank">{labels['download']}</a></p>
+<p class="download"><a href="/api/v2/estimates/{estimate['id']}/pdf?lang={lang}&v={pdf_cache_buster}" target="_blank">{labels['download']}</a></p>
 <h2>{labels['details']}</h2>{''.join(rows_html)}
-<h2>{labels['payment']}</h2><table><thead><tr><th>Name</th><th>Stage</th><th>Percent</th></tr></thead><tbody>{ms_html}</tbody></table>
+{payment_html}
 <h2>{labels['summary']}</h2>{discount_html}<div class="total">{labels['total']}: {money(estimate.get('total_amount'))}</div>
 {form_html}
 </main>

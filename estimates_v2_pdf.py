@@ -1060,8 +1060,9 @@ def _render_totals(est, lang):
     total = float(est.get("total_amount") or 0)
     rows = [
         f"<tr><td class='lbl'>{_L(lang, 'subtotal')}</td><td class='val'>{_money(subtotal)}</td></tr>",
-        f"<tr><td class='lbl'>{_L(lang, 'markup')} ({markup_rate:g}%)</td><td class='val'>{_money(markup_amt)}</td></tr>",
     ]
+    if abs(markup_amt) >= 0.005:
+        rows.append(f"<tr><td class='lbl'>{_L(lang, 'markup')} ({markup_rate:g}%)</td><td class='val'>{_money(markup_amt)}</td></tr>")
     if tax_enabled:
         rows.append(f"<tr><td class='lbl'>{_L(lang, 'tax')} ({tax_rate:g}%)</td><td class='val'>{_money(tax_amt)}</td></tr>")
     if manual_adjustment < 0:
