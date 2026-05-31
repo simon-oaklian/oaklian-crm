@@ -3713,6 +3713,10 @@ class CRMHandler(BaseHTTPRequestHandler):
             return "Rejected"
         return "Draft"
 
+    def _next_estimate_version(self, value):
+        m = re.search(r"(\d+)", str(value or "v1"))
+        return f"v{int(m.group(1)) + 1}" if m else "v2"
+
     def _contract_sign_status_key(self, value):
         key = normalize_key(value or "draft")
         if key in {"signed", "approved", "confirmed"}:
@@ -10280,7 +10284,7 @@ class CRMHandler(BaseHTTPRequestHandler):
             )
             payment_html = (
                 f"<h2>{labels['payment']}</h2>"
-                f"<table><thead><tr><th>Name</th><th>Stage</th><th>Percent</th></tr></thead><tbody>{ms_html}</tbody></table>"
+                f"<table><thead><tr><th>Name</th><th>Stage</th><th class='num'>Percent</th></tr></thead><tbody>{ms_html}</tbody></table>"
             )
         processed = self._estimate_confirm_status_key(estimate.get("confirm_status")) in {"confirmed", "rejected"}
         if processed:
@@ -11967,6 +11971,7 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
             prow = cur.fetchone()
             old_payment_bill_id = prow["bill_id"] if prow else None
 
+        reset_confirmed_quote = False
         if table == "change_orders":
             cur.execute("SELECT * FROM change_orders WHERE id=?", (record_id,))
             existing = cur.fetchone()
@@ -12074,12 +12079,19 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
                     conn.close()
                     return self._json_response({"error": "manual_adjustment must be number"}, 400)
 
-            if current_confirm == "confirmed":
-                locked_fields = {"subtotal", "markup_rate", "manual_adjustment", "total_amount", "line_items_json"}
-                touched_locked = [k for k in locked_fields if k in incoming_payload]
-                if touched_locked:
-                    conn.close()
-                    return self._json_response({"error": f"Estimate already confirmed. Locked fields: {', '.join(sorted(touched_locked))}"}, 400)
+            if current_confirm == "confirmed" and incoming_confirm is None:
+                quote_content_fields = {
+                    "title", "address", "valid_until", "subtotal", "markup_rate",
+                    "manual_adjustment", "total_amount", "line_items_json",
+                }
+                if any(k in incoming_payload for k in quote_content_fields):
+                    reset_confirmed_quote = True
+                    payload["version"] = self._next_estimate_version(existing.get("version"))
+                    payload["confirm_status"] = "draft"
+                    payload["status"] = self._estimate_legacy_status("draft")
+                    payload["confirmed_at"] = None
+                    payload["confirmed_by"] = None
+                    payload["confirm_note"] = None
         if table == "contracts":
             cur.execute("SELECT * FROM contracts WHERE id=?", (record_id,))
             existing = cur.fetchone()
@@ -12393,6 +12405,17 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
         if cur.rowcount == 0:
             conn.close()
             return self._json_response({"error": "Record not found"}, 404)
+        if table == "estimates" and reset_confirmed_quote:
+            cur.execute(
+                """
+                UPDATE estimates
+                SET sent_at=NULL, client_action_at=NULL, client_name=NULL, client_email=NULL,
+                    client_phone=NULL, client_ip=NULL, client_user_agent=NULL,
+                    client_signature_data=NULL
+                WHERE id=?
+                """,
+                (record_id,),
+            )
 
         if table == "change_orders" and project_id:
             self._recalc_designer_commission_for_project(cur, project_id)

@@ -1141,6 +1141,34 @@ def _ensure_estimate_exists(cur, eid):
     return cur.fetchone() is not None
 
 
+def _next_estimate_version(value):
+    m = re.search(r"(\d+)", str(value or "v1"))
+    return f"v{int(m.group(1)) + 1}" if m else "v2"
+
+
+def _reset_confirmed_estimate_for_edit(cur, eid):
+    cur.execute("SELECT confirm_status, status, version FROM estimates WHERE id=?", (eid,))
+    row = cur.fetchone()
+    if not row:
+        return False
+    status = str((row[0] or row[1] or "draft")).strip().lower()
+    if status not in {"confirmed", "approved", "accepted"}:
+        return False
+    cur.execute(
+        """
+        UPDATE estimates
+        SET version=?, confirm_status='draft', status='Draft',
+            confirmed_at=NULL, confirmed_by=NULL, confirm_note=NULL,
+            sent_at=NULL, client_action_at=NULL, client_name=NULL, client_email=NULL,
+            client_phone=NULL, client_ip=NULL, client_user_agent=NULL,
+            client_signature_data=NULL, updated_at=?
+        WHERE id=?
+        """,
+        (_next_estimate_version(row[2]), _now(), eid),
+    )
+    return True
+
+
 def _handle_estimate_full(handler, get_conn, eid):
     lang = _detect_lang(handler)
     conn = get_conn()
@@ -1311,6 +1339,7 @@ def _handle_section_create_in_estimate(handler, get_conn, eid):
         (eid, master_id, name, sort_order, _safe_str(body.get("notes"), 500), _now(), _now()),
     )
     new_id = cur.lastrowid
+    _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"id": new_id}, 201)
@@ -1336,6 +1365,8 @@ def _handle_section_update_in_estimate(handler, get_conn, eid, sid):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(f"UPDATE estimate_sections SET {', '.join(fields)} WHERE id=? AND estimate_id=?", params)
+    if cur.rowcount:
+        _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
@@ -1346,6 +1377,8 @@ def _handle_section_delete_in_estimate(handler, get_conn, eid, sid):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM estimate_sections WHERE id=? AND estimate_id=?", (sid, eid))
+    if cur.rowcount:
+        _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
@@ -1413,6 +1446,7 @@ def _handle_line_create(handler, get_conn, user, eid):
         )
     _recalc_section_subtotal(cur, section_id)
     _recalc_estimate_totals(cur, eid)
+    _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"id": new_id, "line_subtotal": line_subtotal}, 201)
@@ -1473,6 +1507,7 @@ def _handle_line_update(handler, get_conn, user, eid, lid):
              _safe_str(body.get("override_reason"), 500),
              user.get("id"), _now()),
         )
+    _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
@@ -1488,6 +1523,8 @@ def _handle_line_delete(handler, get_conn, eid, lid):
     if r:
         _recalc_section_subtotal(cur, r[0])
     _recalc_estimate_totals(cur, eid)
+    if r:
+        _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
@@ -1644,6 +1681,7 @@ def _handle_payment_milestones_replace(handler, get_conn, eid):
                 _now(), _now(),
             ),
         )
+    _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True, "count": len(items)})
@@ -1723,6 +1761,7 @@ def _handle_load_template(handler, get_conn, eid, tid):
     )
     cur.execute("UPDATE estimate_template_v2 SET use_count=COALESCE(use_count,0)+1 WHERE id=?", (tid,))
     _recalc_estimate_totals(cur, eid)
+    _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
@@ -1770,6 +1809,7 @@ def _handle_addon_create(handler, get_conn, user, eid):
     )
     new_id = cur.lastrowid
     _recalc_estimate_totals(cur, eid)
+    _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"id": new_id, "addon_subtotal": addon_subtotal}, 201)
@@ -1807,11 +1847,14 @@ def _handle_addon_update(handler, get_conn, user, eid, aid):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(f"UPDATE estimate_addons SET {', '.join(fields)} WHERE id=? AND estimate_id=?", params)
+    updated = cur.rowcount
     cur.execute(
         "UPDATE estimate_addons SET addon_subtotal=quantity*unit_price WHERE id=? AND estimate_id=?",
         (aid, eid),
     )
     _recalc_estimate_totals(cur, eid)
+    if updated:
+        _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
@@ -1822,7 +1865,10 @@ def _handle_addon_delete(handler, get_conn, eid, aid):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM estimate_addons WHERE id=? AND estimate_id=?", (aid, eid))
+    deleted = cur.rowcount
     _recalc_estimate_totals(cur, eid)
+    if deleted:
+        _reset_confirmed_estimate_for_edit(cur, eid)
     conn.commit()
     conn.close()
     handler._json_response({"ok": True})
