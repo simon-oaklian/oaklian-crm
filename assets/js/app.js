@@ -3257,6 +3257,8 @@ function applyBrand() {
   if (q("#brand-subtitle")) q("#brand-subtitle").textContent = "REMODELING";
   if (q("#brand-tagline")) q("#brand-tagline").textContent = "REMODELING & CONSTRUCTION";
   if (q("#brand-icon")) q("#brand-icon").src = b.logo_icon_url || "/assets/images/logo-oaklian-light.png";
+  const favicon = q("#app-favicon") || q('link[rel="icon"]');
+  if (favicon) favicon.href = b.logo_icon_url || "/assets/images/favicon.png";
 }
 
 async function api(path, options = {}) {
