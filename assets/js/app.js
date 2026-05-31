@@ -3545,9 +3545,10 @@ async function renderNotificationsCenter() {
 
 function renderLogin() {
   const root = q("#login-view");
+  const loginLogo = (state.brand && state.brand.logo_horizontal_url) || "/assets/images/logo-oaklian-dark.png";
   root.innerHTML = `
     <section class="login-card">
-      <img src="/assets/images/logo-oaklian-dark.png" alt="Oaklian Remodeling Logo" class="login-logo" />
+      <img src="${esc(loginLogo)}" alt="Oaklian Remodeling Logo" class="login-logo" />
       <h2>OAKLIAN REMODELING</h2>
       <p class="login-subtitle">${t("login_tip")}</p>
       <div class="field"><label>${t("username")}</label><input id="login-username" /></div>
