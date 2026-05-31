@@ -1558,18 +1558,7 @@ def _recalc_estimate_totals(cur, eid):
 
 
 def _round_total(amount, mode):
-    if mode == "exact":
-        return round(amount, 2)
-    if abs(float(amount or 0)) < 1000:
-        return round(amount, 2)
-    try:
-        unit = int(mode)
-    except (ValueError, TypeError):
-        unit = 10
-    if unit <= 0:
-        return round(amount, 2)
-    # 四舍五入到最近的 unit
-    return round(amount / unit) * unit
+    return round(amount, 2)
 
 
 def _handle_recalc(handler, get_conn, eid):

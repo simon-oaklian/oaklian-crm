@@ -121,6 +121,7 @@ _LABELS = {
         "markup": "Markup",
         "tax": "Tax",
         "manual_adjustment": "Manual Adjustment",
+        "discount": "Discount",
         "grand_total": "Grand Total",
         "payment": "Payment Schedule",
         "milestone": "Milestone",
@@ -1063,8 +1064,8 @@ def _render_totals(est, lang):
     ]
     if tax_enabled:
         rows.append(f"<tr><td class='lbl'>{_L(lang, 'tax')} ({tax_rate:g}%)</td><td class='val'>{_money(tax_amt)}</td></tr>")
-    if manual_adjustment:
-        rows.append(f"<tr><td class='lbl'>{_L(lang, 'manual_adjustment')}</td><td class='val'>{_money(manual_adjustment)}</td></tr>")
+    if manual_adjustment < 0:
+        rows.append(f"<tr><td class='lbl'>{_L(lang, 'discount')}</td><td class='val'>{_money(manual_adjustment)}</td></tr>")
     rows.append(f"<tr class='grand'><td class='lbl'>{_L(lang, 'grand_total')}</td><td class='val'>{_money(total)}</td></tr>")
     # 包成 summary-block,确保整个总价表不被切
     return f"""

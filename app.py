@@ -10224,6 +10224,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "name": "Name", "email": "Email", "phone": "Phone", "note": "Note", "download": "Open / Download PDF",
                 "confirm_text": "I have reviewed and agree to this quote. The formal contract will be sent separately for signature.",
                 "subtotal": "Items Subtotal", "total": "Grand Total", "status": "Status", "already": "This quote has already been processed.",
+                "discount": "Discount",
                 "acceptance": "Quote Acceptance", "signature": "Signature", "date": "Date",
             },
             "es": {
@@ -10249,6 +10250,12 @@ class CRMHandler(BaseHTTPRequestHandler):
             return "$" + format(float(v or 0), ",.2f")
         def esc(v):
             return html_escape(str(v or ""))
+        manual_adjustment = float(estimate.get("manual_adjustment") or 0)
+        discount_html = (
+            f"<div class='discount'>{labels.get('discount', 'Discount')}: {money(manual_adjustment)}</div>"
+            if manual_adjustment < 0
+            else ""
+        )
         rows_html = []
         for sec in sections:
             lines = sec.get("lines") or []
@@ -10305,7 +10312,7 @@ table{{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}} t
 .quote-table .col-item{{width:26%}} .quote-table .col-desc{{width:34%}} .quote-table .col-qty{{width:12%}} .quote-table .col-unit{{width:10%}} .quote-table .col-subtotal{{width:18%}}
 .quote-table td:nth-child(3),.quote-table th:nth-child(3),.quote-table td:nth-child(5),.quote-table th:nth-child(5){{text-align:right}}
 .quote-table td:nth-child(4),.quote-table th:nth-child(4){{text-align:center}}
-.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .confirm-box{{margin-top:16px;padding:14px 16px;border:1px solid #d8dee8;background:#fff}}
+.total{{font-size:22px;font-weight:700;text-align:right;margin-top:12px}} .discount{{font-size:14px;text-align:right;color:#475467;margin-top:8px}} .confirm-box{{margin-top:16px;padding:14px 16px;border:1px solid #d8dee8;background:#fff}}
 .confirm-head{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;border-bottom:1px solid #e6eaf0;padding-bottom:10px;margin-bottom:12px}}
 .confirm-title{{font-weight:700;font-size:15px;margin-bottom:4px}} .confirm-text{{color:#475467;font-size:12px;line-height:1.4;max-width:560px}}
 .confirm-meta{{display:flex;gap:22px;flex-wrap:wrap;color:#475467;font-size:13px}}
@@ -10325,7 +10332,7 @@ label{{display:block;margin-top:0;font-weight:600}} input,textarea{{box-sizing:b
 <p class="download"><a href="/api/v2/estimates/{estimate['id']}/pdf?lang={lang}" target="_blank">{labels['download']}</a></p>
 <h2>{labels['details']}</h2>{''.join(rows_html)}
 <h2>{labels['payment']}</h2><table><thead><tr><th>Name</th><th>Stage</th><th>Percent</th></tr></thead><tbody>{ms_html}</tbody></table>
-<h2>{labels['summary']}</h2><div class="total">{labels['total']}: {money(estimate.get('total_amount'))}</div>
+<h2>{labels['summary']}</h2>{discount_html}<div class="total">{labels['total']}: {money(estimate.get('total_amount'))}</div>
 {form_html}
 </main>
 <script>

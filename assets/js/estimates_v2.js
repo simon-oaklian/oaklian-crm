@@ -751,7 +751,7 @@
           <span class="num" id="ev2-t-manual-adjustment">${fmtMoney(manualAdjustment)}</span>
         </span>
       </div>
-      <div class="ev2-totals-row ev2-totals-grand"><span>${tt("ev2_total_grand", "总价(已凑整)")}</span><span class="num" id="ev2-t-grand">${fmtMoney(total)}</span></div>
+      <div class="ev2-totals-row ev2-totals-grand"><span>${tt("ev2_total_grand", "总价")}</span><span class="num" id="ev2-t-grand">${fmtMoney(total)}</span></div>
     `;
   }
 
