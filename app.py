@@ -2532,6 +2532,17 @@ class CRMHandler(BaseHTTPRequestHandler):
         self._set_headers(200, ctype)
         self.wfile.write(path.read_bytes())
 
+    def _serve_brand_favicon(self):
+        conn = get_conn()
+        cur = conn.cursor()
+        icon_url = (self._brand_logo_urls(cur).get("light") or "").strip()
+        conn.close()
+        if icon_url.startswith("/uploads/"):
+            return self._serve_static_file(unquote(icon_url[len("/uploads/") :]), UPLOADS_DIR)
+        if icon_url.startswith("/assets/"):
+            return self._serve_static_file(unquote(icon_url[len("/assets/") :]), ASSETS_DIR)
+        return self._serve_static_file("images/favicon.png", ASSETS_DIR)
+
     def _parse_cookies(self):
         raw = self.headers.get("Cookie", "")
         out = {}
@@ -4702,7 +4713,7 @@ class CRMHandler(BaseHTTPRequestHandler):
         if path == "/":
             return self._serve_static_file("index.html", STATIC_DIR)
         if path == "/favicon.ico":
-            return self._serve_static_file("images/favicon.png", ASSETS_DIR)
+            return self._serve_brand_favicon()
         if path.startswith("/assets/"):
             return self._serve_static_file(unquote(path[len("/assets/") :]), ASSETS_DIR)
         if path.startswith("/static/"):
