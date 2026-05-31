@@ -3624,12 +3624,16 @@ function navParentLabelKey(groupKey) {
   return groupKey;
 }
 function scrollNavParentIntoView(groupKey) {
-  requestAnimationFrame(() => {
+  const reveal = () => {
+    const menu = q("#menu");
     const parent = q('.menu-parent[data-parent="' + groupKey + '"]');
     const children = parent && parent.querySelector(".menu-children");
-    if (!children) return;
-    children.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  });
+    if (!menu || !children) return;
+    const targetTop = children.offsetTop + children.scrollHeight - menu.clientHeight + 12;
+    menu.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+  };
+  requestAnimationFrame(reveal);
+  setTimeout(reveal, 260);
 }
 function renderMenu() {
   const menu = q("#menu");
