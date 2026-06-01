@@ -1145,6 +1145,8 @@ def _render_payment(est, lang, show_pct):
 
 
 def _render_remarks(est, lang):
+    if str(est.get("pdf_show_notes", 1)).strip().lower() in {"0", "false", "no"}:
+        return ""
     remarks = _LABELS.get(lang if lang != "both" else "zh", _LABELS["zh"])["default_remarks"]
     if lang == "both":
         en_remarks = _LABELS["en"]["default_remarks"]

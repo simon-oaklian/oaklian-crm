@@ -1962,6 +1962,7 @@ _PDF_OPTION_FIELDS = [
     "pdf_show_pct",
     "pdf_show_material",
     "pdf_show_labor",
+    "pdf_show_notes",
     "pdf_language",
 ]
 

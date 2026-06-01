@@ -652,6 +652,7 @@
           <label><input type="checkbox" id="ev2-pdf-show-labor" ${est.pdf_show_labor ? "checked" : ""}/> ${tt("ev2_pdf_show_labor", "显示\"人工\"列")}</label>
           <span class="ev2-divider">|</span>
           <label><input type="checkbox" id="ev2-pdf-show-pct" ${est.pdf_show_pct ? "checked" : ""}/> ${tt("ev2_pdf_show_pct", "PDF 显示百分比")}</label>
+          <label><input type="checkbox" id="ev2-pdf-show-notes" ${est.pdf_show_notes === 0 ? "" : "checked"}/> ${tt("ev2_pdf_show_notes", "PDF 显示备注条款")}</label>
           <span class="ev2-divider">|</span>
           <label>${tt("ev2_pdf_lang_label", "PDF 语言:")}
             <select class="ev2-input ev2-input-sm" id="ev2-pdf-lang">
@@ -895,7 +896,7 @@
     syncStageDropdowns();
     // PDF 设置
     ["ev2-pdf-show-unit", "ev2-pdf-show-material", "ev2-pdf-show-labor",
-     "ev2-pdf-show-pct", "ev2-pdf-lang"].forEach(id => {
+     "ev2-pdf-show-pct", "ev2-pdf-show-notes", "ev2-pdf-lang"].forEach(id => {
       const el = $("#" + id);
       if (el) el.addEventListener("change", onPdfSettingChange);
     });
@@ -1413,6 +1414,7 @@
       pdf_show_material: $("#ev2-pdf-show-material").checked ? 1 : 0,
       pdf_show_labor: $("#ev2-pdf-show-labor").checked ? 1 : 0,
       pdf_show_pct: $("#ev2-pdf-show-pct").checked ? 1 : 0,
+      pdf_show_notes: $("#ev2-pdf-show-notes").checked ? 1 : 0,
       pdf_language: $("#ev2-pdf-lang").value,
     };
     // 同步到当前 estimate 对象,这样导出 PDF 时立刻生效
@@ -1420,6 +1422,7 @@
     est.pdf_show_material = body.pdf_show_material;
     est.pdf_show_labor = body.pdf_show_labor;
     est.pdf_show_pct = body.pdf_show_pct;
+    est.pdf_show_notes = body.pdf_show_notes;
     est.pdf_language = body.pdf_language;
     debounce("pdf", async () => {
       try {
