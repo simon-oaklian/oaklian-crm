@@ -10028,7 +10028,7 @@ class CRMHandler(BaseHTTPRequestHandler):
             },
             "en": {
                 "estimate_title": "Estimate / Proposal",
-                "contract_title": "Contract",
+                "contract_title": "Construction Agreement",
                 "change_order_title": "Change Order",
                 "customer": "Customer",
                 "project": "Project",
@@ -10074,11 +10074,61 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "no_line_items": "No line items",
                 "no_payment_plan": "No payment plan",
                 "footer_note": "This estimate is issued for project communication and signing reference.",
-                "contract_clause_default": "This contract is executed upon mutual written confirmation.",
-                "contract_intro_default": "This contract defines the agreed project scope, schedule expectations, payment milestones, and signature requirements.",
+                "contract_clause_default": "The parties agree to the standard terms below together with the project scope, price, payment schedule, and any signed change orders.",
+                "contract_intro_default": "This Construction Agreement summarizes the approved scope of work, contract price, payment schedule, project expectations, and signature requirements between Oaklian Builders and the customer named below.",
                 "signature_note_default": "This contract becomes effective after both parties sign.",
                 "print_disclaimer_default": "This document is issued for project communication and contract confirmation.",
                 "estimate_note_default": "Thank you for your trust. Scope can be adjusted within validity period.",
+                "contract_terms_sections": [
+                    (
+                        "1. Contract Documents",
+                        "This Agreement includes this contract, the approved estimate or proposal, the listed scope of work, the payment schedule, approved drawings or specifications if any, and any written change orders signed or otherwise approved by both parties.",
+                    ),
+                    (
+                        "2. Scope of Work",
+                        "Contractor will perform the work described in the Scope / Details section. Work not specifically listed, including concealed conditions, design changes, owner-requested upgrades, permit-driven changes, utility relocations, structural issues, hazardous materials, or third-party requirements, is excluded unless added by written change order.",
+                    ),
+                    (
+                        "3. Contract Price and Payment",
+                        "Customer agrees to pay the contract price shown in this Agreement according to the payment schedule. Payments are due when the stated milestone is reached, unless the parties agree otherwise in writing. Late or unpaid amounts may delay scheduling, ordering, or continuation of work.",
+                    ),
+                    (
+                        "4. Schedule and Access",
+                        "Projected dates are estimates and may be affected by material availability, inspections, permits, weather, building conditions, customer decisions, and other events outside Contractor's control. Customer will provide reasonable site access, utilities, parking, and timely decisions needed for the work.",
+                    ),
+                    (
+                        "5. Permits, Inspections, and Code Requirements",
+                        "Permit responsibility, if applicable, should be identified before work begins. If a permit, inspection, HOA, building department, or code requirement changes the scope, price, or schedule, the change will be handled through a written change order.",
+                    ),
+                    (
+                        "6. Materials, Allowances, and Customer-Supplied Items",
+                        "Material selections, allowances, and customer-supplied items must be confirmed before installation. Delays, defects, shortages, or incompatibility in customer-supplied materials may result in additional labor charges or schedule changes.",
+                    ),
+                    (
+                        "7. Change Orders",
+                        "Any change to scope, price, materials, schedule, or payment terms must be documented as a change order and approved before the changed work is performed, except where immediate action is reasonably required to protect the site or comply with safety requirements.",
+                    ),
+                    (
+                        "8. Site Conditions and Exclusions",
+                        "Contractor is not responsible for pre-existing, concealed, or unknown conditions unless expressly included in the scope. Examples include mold, rot, termites, asbestos, lead paint, defective framing, plumbing or electrical conditions, waterproofing failures, or conditions discovered after demolition.",
+                    ),
+                    (
+                        "9. Warranty and Completion",
+                        "Contractor will perform work in a workmanlike manner consistent with applicable standards. Warranty coverage, if any, applies to Contractor's workmanship and does not cover normal wear, misuse, owner-supplied materials, manufacturer defects, existing conditions, or work performed by others.",
+                    ),
+                    (
+                        "10. Required Notices and Legal Review",
+                        "For residential home improvement work, any required state notices, lien notices, cancellation rights, license disclosures, and down-payment limitations must be included as applicable. Customer and Contractor should review the final contract package before signing.",
+                    ),
+                    (
+                        "11. Disputes",
+                        "The parties will first try to resolve disputes through good-faith communication. If unresolved, the parties may use the dispute process required by applicable law or by any signed addendum to this Agreement.",
+                    ),
+                    (
+                        "12. Signatures",
+                        "By signing, the parties confirm that they have reviewed the scope, price, payment schedule, and standard terms, and agree that this Agreement and approved change orders control the project.",
+                    ),
+                ],
             },
         }
         return texts["zh"] if lang == "zh" else texts["es"] if lang == "es" else texts["en"]
@@ -10810,6 +10860,25 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         )
         if not plan_rows:
             plan_rows = f"<tr><td colspan='3'>{txt['no_payment_plan']}</td></tr>"
+        contract_terms = txt.get("contract_terms_sections") or []
+        if contract_terms:
+            terms_rows = []
+            if clause_text:
+                terms_rows.append(f"<p class='terms-lead'>{html_escape(clause_text)}</p>")
+            for title, body in contract_terms:
+                terms_rows.append(
+                    "<div class='term-item'>"
+                    f"<h4>{html_escape(title)}</h4>"
+                    f"<p>{html_escape(body)}</p>"
+                    "</div>"
+                )
+            terms_html = (
+                f"<section class='doc-section terms-section'><h3>{txt['terms']}</h3>"
+                f"<div class='term-list'>{''.join(terms_rows)}</div></section>"
+            )
+        else:
+            terms_html = f"<div class='notes'><b>{txt['terms']}:</b><br>{html_escape(clause_text)}</div>"
+        note_html = f"<div class='notes'><b>{txt['notes']}:</b><br>{html_escape(note_text)}</div>" if note_text else ""
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
         html = f"""<!doctype html>
@@ -10843,6 +10912,12 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
 .tot-row{{display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding:4px 0}}
 .tot-row.total{{font-size:16px;font-weight:800;border-top:2px solid #111827;border-bottom:0;padding-top:8px}}
 .notes{{margin-top:12px;border-top:1px solid #d1d5db;padding:10px 0;min-height:42px;break-inside:avoid;page-break-inside:avoid}}
+.terms-section{{break-inside:auto;page-break-inside:auto}}
+.term-list{{border-top:1px solid #d1d5db;padding-top:8px}}
+.terms-lead{{font-size:12px;line-height:1.5;margin:0 0 8px;color:#334155}}
+.term-item{{break-inside:avoid;page-break-inside:avoid;margin:0 0 9px}}
+.term-item h4{{font-size:12.5px;margin:0 0 3px;color:#111827}}
+.term-item p{{font-size:11.5px;line-height:1.45;margin:0;color:#334155}}
 .sign-grid{{margin-top:30px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;break-inside:avoid;page-break-inside:avoid}}
 .sign-box{{border-top:1px solid #64748b;padding-top:8px;min-height:42px;font-size:12px}}
 .muted{{color:#64748b;font-size:12px;margin-top:18px}}
@@ -10897,8 +10972,8 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
   </table>
   </section>
   <div class="tot"><div class="tot-row total"><span>{txt['total']}</span><span>{money(contract.get('total_amount'))}</span></div></div>
-  <div class="notes"><b>{txt['notes']}:</b><br>{html_escape(note_text)}</div>
-  <div class="notes"><b>{txt['terms']}:</b><br>{html_escape(clause_text)}</div>
+  {note_html}
+  {terms_html}
   <h3 style="margin-top:14px;">{txt['signature']}</h3>
   <div class="sign-grid">
     <div class="sign-box">{txt['customer_signature']}：</div>
