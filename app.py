@@ -10751,6 +10751,44 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
                 return fallback
             return value
 
+        def contract_display_text(value, fallback=""):
+            value = str(value or "").strip()
+            if not value:
+                return fallback
+            if lang == "zh" or not has_cjk(value):
+                return value
+            mapped = {
+                "进场": "Mobilization",
+                "拆除": "Demolition",
+                "水电": "Plumbing / Electrical Rough-in",
+                "水管": "Plumbing",
+                "电": "Electrical",
+                "泥木": "Framing / Rough Carpentry",
+                "油漆": "Paint / Finish",
+                "安装": "Installation",
+                "验收": "Final Walkthrough",
+                "吧台omakasa": "Omakase Bar",
+                "吧台": "Bar Counter",
+                "拆除": "Demolition",
+                "许可与设计": "Permits & Design",
+                "结构(框架/地基)": "Structural",
+                "隔热与防水": "Insulation & Waterproofing",
+                "墙面与油漆": "Drywall & Paint",
+                "地面": "Flooring",
+                "橱柜与台面": "Cabinets & Countertops",
+                "门窗": "Doors & Windows",
+                "卫浴洁具": "Bath Fixtures",
+                "外部": "Exterior",
+                "收尾与清洁": "Finish & Cleanup",
+                "项": "item",
+                "组": "set",
+                "个": "each",
+                "次": "time",
+                "新节点": "",
+                "节点": "",
+            }.get(value.lower(), "")
+            return mapped or value
+
         created_date = str(contract.get("created_at") or now_ts())[:10]
         logo_url = (brand.get("logo_horizontal_url") or print_cfg.get("company_logo_dark") or "/assets/images/logo-oaklian-dark.png").strip()
         company_name = (print_cfg.get("company_name") or brand.get("company_name") or "OAKLIAN REMODELING").strip()
@@ -10850,21 +10888,20 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             lines = sec.get("lines") or []
             line_rows = "".join(
                 "<tr>"
-                f"<td>{html_escape(str(localized_value(line, 'item_name') or line.get('item') or line.get('name') or '-'))}</td>"
-                f"<td>{html_escape(str(localized_value(line, 'description')))}</td>"
+                f"<td>{html_escape(contract_display_text(localized_value(line, 'item_name') or line.get('item') or line.get('name') or '-'))}</td>"
+                f"<td>{html_escape(contract_display_text(localized_value(line, 'description')))}</td>"
                 f"<td class='num'>{html_escape(str(line_qty(line) if line_qty(line) is not None else ''))}</td>"
-                f"<td class='center'>{html_escape(str(line.get('unit') or ''))}</td>"
-                f"<td class='num'>{money(line.get('unit_price') if line.get('unit_price') not in (None, '') else (num_value(line.get('material_cost')) + num_value(line.get('labor_cost'))))}</td>"
+                f"<td class='center'>{html_escape(contract_display_text(line.get('unit') or ''))}</td>"
                 f"<td class='num'>{money(line.get('line_subtotal') if line.get('line_subtotal') not in (None, '') else line.get('subtotal'))}</td>"
                 "</tr>"
                 for line in lines
             )
             if not line_rows:
-                line_rows = f"<tr><td colspan='6'>{txt['no_line_items']}</td></tr>"
+                line_rows = f"<tr><td colspan='5'>{txt['no_line_items']}</td></tr>"
             scope_blocks.append(
-                f"<div class='scope-subsection'><h3>{html_escape(str(localized_value(sec, 'name') or '-'))}</h3>"
-                "<table class='scope-table'><colgroup><col class='col-item'><col class='col-desc'><col class='col-qty'><col class='col-unit'><col class='col-price'><col class='col-total'></colgroup>"
-                f"<thead><tr><th>{txt['category']}</th><th>{txt['line_description']}</th><th class='num'>{txt['qty']}</th><th class='center'>{txt['unit']}</th><th class='num'>{txt['unit_price']}</th><th class='num'>{txt['subtotal']}</th></tr></thead>"
+                f"<div class='scope-subsection'><h3>{html_escape(contract_display_text(localized_value(sec, 'name') or '-'))}</h3>"
+                "<table class='scope-table'><colgroup><col class='col-item'><col class='col-desc'><col class='col-qty'><col class='col-unit'><col class='col-total'></colgroup>"
+                f"<thead><tr><th>{txt['category']}</th><th>{txt['line_description']}</th><th class='num'>{txt['qty']}</th><th class='center'>{txt['unit']}</th><th class='num'>{txt['subtotal']}</th></tr></thead>"
                 f"<tbody>{line_rows}</tbody></table></div>"
             )
         scope_body = "".join(scope_blocks) or f"<table><tbody><tr><td>{txt['no_line_items']}</td></tr></tbody></table>"
@@ -10883,7 +10920,7 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             if stage_key in {"stage_done", "stage_started", "contract_signed"}:
                 stage_label = "Contract Signed" if stage_key == "contract_signed" else "Project Milestone"
             else:
-                stage_label = raw_stage or "Project Milestone"
+                stage_label = contract_display_text(raw_stage, "Project Milestone")
             percent_value = p.get("percent")
             percent_text = ""
             if percent_value not in (None, ""):
@@ -10921,15 +10958,6 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         else:
             terms_html = f"<div class='notes'><b>{txt['terms']}:</b><br>{html_escape(clause_text)}</div>"
         note_html = f"<div class='notes'><b>{txt['notes']}:</b><br>{html_escape(note_text)}</div>" if note_text else ""
-        overview_html = f"""
-  <section class="doc-section overview-section">
-    <h3>{txt.get('agreement_overview', 'Agreement Overview')}</h3>
-    <div class="summary-strip">
-      <div><span>{txt.get('contract_price', 'Contract Price')}</span><strong>{money(contract.get('total_amount'))}</strong></div>
-      <div><span>{txt.get('project_site', 'Project Site')}</span><strong>{html_escape(address or '-')}</strong></div>
-    </div>
-  </section>
-"""
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
         html = f"""<!doctype html>
@@ -10953,18 +10981,12 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
 .box-title{{font-weight:800;margin-bottom:5px;color:#111827}}
 .doc-section{{break-inside:avoid;page-break-inside:avoid;margin:16px 0}}
 .doc-section h3{{border-left:4px solid #777;padding-left:8px;margin:0 0 9px;font-size:15px}}
-.overview-section{{margin-top:8px}}
-.summary-strip{{display:grid;grid-template-columns:1fr 2fr;border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db}}
-.summary-strip div{{padding:8px 10px;border-right:1px solid #e5e7eb}}
-.summary-strip div:last-child{{border-right:0}}
-.summary-strip span{{display:block;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px}}
-.summary-strip strong{{display:block;font-size:13px;color:#111827;line-height:1.25}}
 table{{width:100%;border-collapse:collapse;margin-top:10px}}
 th,td{{border-bottom:1px solid #e5e7eb;padding:7px 8px;text-align:left;font-size:12px;vertical-align:top}}
 th{{background:#f1f5f9;color:#111827;font-weight:800}}
 .num{{text-align:right}}
 .center{{text-align:center}}
-.col-item{{width:26%}}.col-desc{{width:34%}}.col-qty{{width:8%}}.col-unit{{width:8%}}.col-price{{width:12%}}.col-total{{width:12%}}
+.col-item{{width:28%}}.col-desc{{width:42%}}.col-qty{{width:8%}}.col-unit{{width:8%}}.col-total{{width:14%}}
 .tot{{margin:14px 0 0 auto;width:44%;display:grid;gap:6px;text-align:right}}
 .tot-row{{display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding:4px 0}}
 .tot-row.total{{font-size:16px;font-weight:800;border-top:2px solid #111827;border-bottom:0;padding-top:8px}}
@@ -11021,11 +11043,12 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
       <div class="box-title">{txt['project']}</div>
       <div><b>{txt['project']}:</b> {html_escape(contract.get('project_name') or contract.get('title') or '')}</div>
       <div><b>{txt['contract_no']}:</b> {html_escape(contract.get('contract_no') or '')}</div>
+      <div><b>{txt.get('contract_price', 'Contract Price')}:</b> {money(contract.get('total_amount'))}</div>
+      <div><b>{txt.get('project_site', 'Project Site')}:</b> {html_escape(address or '-')}</div>
       <div><b>{txt['date']}:</b> {html_escape(created_date)}</div>
       <div><b>{txt['signed_date']}:</b> {html_escape(contract.get('signed_date') or '')}</div>
     </div>
   </div>
-  {overview_html}
   <section class="doc-section">
     <h3>{txt['payment_plan']}</h3>
     <table>
