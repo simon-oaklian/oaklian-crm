@@ -10061,6 +10061,9 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "payment_plan": "Payment Plan",
                 "node": "Node",
                 "amount": "Amount",
+                "payment_milestone": "Payment Milestone",
+                "construction_stage": "Construction Stage",
+                "percentage": "Percent",
                 "description": "Change Description",
                 "contract_summary": "Contract Summary",
                 "impact_payment_plan": "Impact Payment Plan",
@@ -10079,7 +10082,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "signature_note_default": "This contract becomes effective after both parties sign.",
                 "print_disclaimer_default": "This document is issued for project communication and contract confirmation.",
                 "estimate_note_default": "Thank you for your trust. Scope can be adjusted within validity period.",
-                "agreement_overview": "Agreement Overview",
+                "agreement_overview": "Contract Snapshot",
                 "contract_price": "Contract Price",
                 "project_site": "Project Site",
                 "scope_exhibit": "Exhibit A - Scope of Work",
@@ -10778,16 +10781,29 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             plans = []
         if not plans:
             cur.execute(
-                "SELECT name,trigger_type,amount_type,amount_value FROM contract_payment_milestones WHERE contract_id=? ORDER BY id ASC",
+                "SELECT name,trigger_type,trigger_stage,trigger_progress,amount_type,amount_value FROM contract_payment_milestones WHERE contract_id=? ORDER BY id ASC",
                 (contract_id,),
             )
             rows = cur.fetchall()
-            for r in rows:
+            for idx, r in enumerate(rows, start=1):
                 amount_due = self._milestone_amount(contract.get("total_amount") or 0, r["amount_type"], r["amount_value"])
+                raw_name = str(r["name"] or "").strip()
+                display_name = raw_name if raw_name and raw_name not in {"新节点", "节点"} else f"Progress Payment {idx}"
+                trigger_type = normalize_key(r["trigger_type"])
+                stage_name = str(r["trigger_stage"] or "").strip()
+                if trigger_type == "contract_signed":
+                    stage_label = "Contract Signed"
+                elif stage_name:
+                    stage_label = stage_name
+                elif r["trigger_progress"] not in (None, ""):
+                    stage_label = f"Project Progress {r['trigger_progress']}%"
+                else:
+                    stage_label = "Project Milestone"
                 plans.append(
                     {
-                        "node": r["name"],
-                        "due_date": r["trigger_type"],
+                        "node": display_name,
+                        "stage": stage_label,
+                        "percent": r["amount_value"] if normalize_key(r["amount_type"]) == "percent" else "",
                         "amount": amount_due,
                     }
                 )
@@ -10858,18 +10874,34 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             f"{scope_body}</section>"
         )
 
-        plan_rows = "".join(
-            [
+        plan_row_parts = []
+        for idx, p in enumerate(plans, start=1):
+            raw_node = str(p.get("node") or p.get("name") or "").strip()
+            node_label = raw_node if raw_node and raw_node not in {"新节点", "节点"} else f"Progress Payment {idx}"
+            raw_stage = str(p.get("stage") or p.get("construction_stage") or p.get("trigger_stage") or p.get("due_date") or "").strip()
+            stage_key = normalize_key(raw_stage)
+            if stage_key in {"stage_done", "stage_started", "contract_signed"}:
+                stage_label = "Contract Signed" if stage_key == "contract_signed" else "Project Milestone"
+            else:
+                stage_label = raw_stage or "Project Milestone"
+            percent_value = p.get("percent")
+            percent_text = ""
+            if percent_value not in (None, ""):
+                try:
+                    percent_text = f"{float(percent_value):g}%"
+                except (TypeError, ValueError):
+                    percent_text = html_escape(str(percent_value))
+            plan_row_parts.append(
                 "<tr>"
-                f"<td>{html_escape(str(p.get('node', '')))}</td>"
-                f"<td>{html_escape(str(p.get('due_date', '')))}</td>"
-                f"<td style='text-align:right'>{money(p.get('amount'))}</td>"
+                f"<td>{html_escape(node_label)}</td>"
+                f"<td>{html_escape(stage_label)}</td>"
+                f"<td class='num'>{percent_text}</td>"
+                f"<td class='num'>{money(p.get('amount'))}</td>"
                 "</tr>"
-                for p in plans
-            ]
-        )
+            )
+        plan_rows = "".join(plan_row_parts)
         if not plan_rows:
-            plan_rows = f"<tr><td colspan='3'>{txt['no_payment_plan']}</td></tr>"
+            plan_rows = f"<tr><td colspan='4'>{txt['no_payment_plan']}</td></tr>"
         contract_terms = txt.get("contract_terms_sections") or []
         if contract_terms:
             terms_rows = []
@@ -10892,11 +10924,9 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         overview_html = f"""
   <section class="doc-section overview-section">
     <h3>{txt.get('agreement_overview', 'Agreement Overview')}</h3>
-    <div class="overview-grid">
+    <div class="summary-strip">
       <div><span>{txt.get('contract_price', 'Contract Price')}</span><strong>{money(contract.get('total_amount'))}</strong></div>
-      <div><span>{txt['contract_no']}</span><strong>{html_escape(contract.get('contract_no') or '')}</strong></div>
       <div><span>{txt.get('project_site', 'Project Site')}</span><strong>{html_escape(address or '-')}</strong></div>
-      <div><span>{txt['signed_status']}</span><strong>{html_escape(contract.get('signed_status') or '')}</strong></div>
     </div>
   </section>
 """
@@ -10924,11 +10954,11 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
 .doc-section{{break-inside:avoid;page-break-inside:avoid;margin:16px 0}}
 .doc-section h3{{border-left:4px solid #777;padding-left:8px;margin:0 0 9px;font-size:15px}}
 .overview-section{{margin-top:8px}}
-.overview-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db}}
-.overview-grid div{{padding:9px 10px;border-right:1px solid #e5e7eb;min-height:46px}}
-.overview-grid div:last-child{{border-right:0}}
-.overview-grid span{{display:block;font-size:10.5px;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}}
-.overview-grid strong{{display:block;font-size:13px;color:#111827;line-height:1.25}}
+.summary-strip{{display:grid;grid-template-columns:1fr 2fr;border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db}}
+.summary-strip div{{padding:8px 10px;border-right:1px solid #e5e7eb}}
+.summary-strip div:last-child{{border-right:0}}
+.summary-strip span{{display:block;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px}}
+.summary-strip strong{{display:block;font-size:13px;color:#111827;line-height:1.25}}
 table{{width:100%;border-collapse:collapse;margin-top:10px}}
 th,td{{border-bottom:1px solid #e5e7eb;padding:7px 8px;text-align:left;font-size:12px;vertical-align:top}}
 th{{background:#f1f5f9;color:#111827;font-weight:800}}
@@ -10939,13 +10969,14 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
 .tot-row{{display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding:4px 0}}
 .tot-row.total{{font-size:16px;font-weight:800;border-top:2px solid #111827;border-bottom:0;padding-top:8px}}
 .notes{{margin-top:12px;border-top:1px solid #d1d5db;padding:10px 0;min-height:42px;break-inside:avoid;page-break-inside:avoid}}
-.terms-section{{break-inside:auto;page-break-inside:auto}}
+.terms-section{{break-inside:auto;page-break-inside:auto;page-break-before:always;margin-top:0}}
 .term-list{{border-top:1px solid #d1d5db;padding-top:8px}}
-.terms-lead{{font-size:12px;line-height:1.5;margin:0 0 8px;color:#334155}}
-.term-item{{break-inside:avoid;page-break-inside:avoid;margin:0 0 9px}}
-.term-item h4{{font-size:12.5px;margin:0 0 3px;color:#111827}}
-.term-item p{{font-size:11.5px;line-height:1.45;margin:0;color:#334155}}
-.exhibit-section{{break-inside:auto;page-break-inside:auto;margin-top:22px;border-top:2px solid #111827;padding-top:12px}}
+.terms-lead{{font-size:11.5px;line-height:1.45;margin:0 0 8px;color:#334155}}
+.term-item{{break-inside:avoid;page-break-inside:avoid;margin:0 0 7px}}
+.term-item h4{{font-size:12px;margin:0 0 2px;color:#111827}}
+.term-item p{{font-size:10.8px;line-height:1.35;margin:0;color:#334155}}
+.signature-section{{break-inside:avoid;page-break-inside:avoid;margin-top:20px}}
+.exhibit-section{{break-inside:auto;page-break-inside:auto;page-break-before:always;margin-top:0;border-top:2px solid #111827;padding-top:12px}}
 .exhibit-note{{font-size:11.5px;color:#64748b;margin:0 0 8px}}
 .scope-subsection{{break-inside:avoid;page-break-inside:avoid;margin:14px 0}}
 .scope-subsection h3{{font-size:13px;border-left:0;padding-left:0;margin:0 0 6px;color:#111827}}
@@ -10995,22 +11026,24 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
     </div>
   </div>
   {overview_html}
-  {terms_html}
   <section class="doc-section">
     <h3>{txt['payment_plan']}</h3>
     <table>
-      <thead><tr><th>{txt['node']}</th><th>{txt['valid_until']}</th><th>{txt['amount']}</th></tr></thead>
+      <thead><tr><th>{txt.get('payment_milestone', txt['node'])}</th><th>{txt.get('construction_stage', txt['valid_until'])}</th><th class="num">{txt.get('percentage', 'Percent')}</th><th class="num">{txt['amount']}</th></tr></thead>
       <tbody>{plan_rows}</tbody>
     </table>
   </section>
   <div class="tot"><div class="tot-row total"><span>{txt['total']}</span><span>{money(contract.get('total_amount'))}</span></div></div>
   {note_html}
-  <h3 style="margin-top:14px;">{txt['signature']}</h3>
-  <div class="sign-grid">
-    <div class="sign-box">{txt['customer_signature']}：</div>
-    <div class="sign-box">{txt['company_signature']}：</div>
-  </div>
-  {signature_hint_html}
+  {terms_html}
+  <section class="signature-section">
+    <h3>{txt['signature']}</h3>
+    <div class="sign-grid">
+      <div class="sign-box">{txt['customer_signature']}:</div>
+      <div class="sign-box">{txt['company_signature']}:</div>
+    </div>
+    {signature_hint_html}
+  </section>
   {scope_html}
   <div class="muted">{html_escape(footer_meta_line or (brand.get('legal_name') or company_name))} | {txt['generated_at']} {html_escape(now_ts())}</div>
   <div class="muted">{html_escape(footer_disclaimer)}</div>
