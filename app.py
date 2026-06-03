@@ -10079,6 +10079,11 @@ class CRMHandler(BaseHTTPRequestHandler):
                 "signature_note_default": "This contract becomes effective after both parties sign.",
                 "print_disclaimer_default": "This document is issued for project communication and contract confirmation.",
                 "estimate_note_default": "Thank you for your trust. Scope can be adjusted within validity period.",
+                "agreement_overview": "Agreement Overview",
+                "contract_price": "Contract Price",
+                "project_site": "Project Site",
+                "scope_exhibit": "Exhibit A - Scope of Work",
+                "scope_exhibit_note": "The following detailed scope is incorporated into this Agreement as Exhibit A.",
                 "contract_terms_sections": [
                     (
                         "1. Contract Documents",
@@ -10841,12 +10846,17 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
             if not line_rows:
                 line_rows = f"<tr><td colspan='6'>{txt['no_line_items']}</td></tr>"
             scope_blocks.append(
-                f"<section class='doc-section'><h3>{html_escape(str(localized_value(sec, 'name') or '-'))}</h3>"
+                f"<div class='scope-subsection'><h3>{html_escape(str(localized_value(sec, 'name') or '-'))}</h3>"
                 "<table class='scope-table'><colgroup><col class='col-item'><col class='col-desc'><col class='col-qty'><col class='col-unit'><col class='col-price'><col class='col-total'></colgroup>"
                 f"<thead><tr><th>{txt['category']}</th><th>{txt['line_description']}</th><th class='num'>{txt['qty']}</th><th class='center'>{txt['unit']}</th><th class='num'>{txt['unit_price']}</th><th class='num'>{txt['subtotal']}</th></tr></thead>"
-                f"<tbody>{line_rows}</tbody></table></section>"
+                f"<tbody>{line_rows}</tbody></table></div>"
             )
-        scope_html = "".join(scope_blocks) or f"<section class='doc-section'><h3>{txt['details']}</h3><table><tbody><tr><td>{txt['no_line_items']}</td></tr></tbody></table></section>"
+        scope_body = "".join(scope_blocks) or f"<table><tbody><tr><td>{txt['no_line_items']}</td></tr></tbody></table>"
+        scope_html = (
+            f"<section class='doc-section exhibit-section'><h3>{txt.get('scope_exhibit', 'Exhibit A - Scope of Work')}</h3>"
+            f"<p class='exhibit-note'>{txt.get('scope_exhibit_note', 'The following detailed scope is incorporated into this Agreement as Exhibit A.')}</p>"
+            f"{scope_body}</section>"
+        )
 
         plan_rows = "".join(
             [
@@ -10879,6 +10889,17 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         else:
             terms_html = f"<div class='notes'><b>{txt['terms']}:</b><br>{html_escape(clause_text)}</div>"
         note_html = f"<div class='notes'><b>{txt['notes']}:</b><br>{html_escape(note_text)}</div>" if note_text else ""
+        overview_html = f"""
+  <section class="doc-section overview-section">
+    <h3>{txt.get('agreement_overview', 'Agreement Overview')}</h3>
+    <div class="overview-grid">
+      <div><span>{txt.get('contract_price', 'Contract Price')}</span><strong>{money(contract.get('total_amount'))}</strong></div>
+      <div><span>{txt['contract_no']}</span><strong>{html_escape(contract.get('contract_no') or '')}</strong></div>
+      <div><span>{txt.get('project_site', 'Project Site')}</span><strong>{html_escape(address or '-')}</strong></div>
+      <div><span>{txt['signed_status']}</span><strong>{html_escape(contract.get('signed_status') or '')}</strong></div>
+    </div>
+  </section>
+"""
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
         html = f"""<!doctype html>
@@ -10902,6 +10923,12 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
 .box-title{{font-weight:800;margin-bottom:5px;color:#111827}}
 .doc-section{{break-inside:avoid;page-break-inside:avoid;margin:16px 0}}
 .doc-section h3{{border-left:4px solid #777;padding-left:8px;margin:0 0 9px;font-size:15px}}
+.overview-section{{margin-top:8px}}
+.overview-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db}}
+.overview-grid div{{padding:9px 10px;border-right:1px solid #e5e7eb;min-height:46px}}
+.overview-grid div:last-child{{border-right:0}}
+.overview-grid span{{display:block;font-size:10.5px;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}}
+.overview-grid strong{{display:block;font-size:13px;color:#111827;line-height:1.25}}
 table{{width:100%;border-collapse:collapse;margin-top:10px}}
 th,td{{border-bottom:1px solid #e5e7eb;padding:7px 8px;text-align:left;font-size:12px;vertical-align:top}}
 th{{background:#f1f5f9;color:#111827;font-weight:800}}
@@ -10918,6 +10945,10 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
 .term-item{{break-inside:avoid;page-break-inside:avoid;margin:0 0 9px}}
 .term-item h4{{font-size:12.5px;margin:0 0 3px;color:#111827}}
 .term-item p{{font-size:11.5px;line-height:1.45;margin:0;color:#334155}}
+.exhibit-section{{break-inside:auto;page-break-inside:auto;margin-top:22px;border-top:2px solid #111827;padding-top:12px}}
+.exhibit-note{{font-size:11.5px;color:#64748b;margin:0 0 8px}}
+.scope-subsection{{break-inside:avoid;page-break-inside:avoid;margin:14px 0}}
+.scope-subsection h3{{font-size:13px;border-left:0;padding-left:0;margin:0 0 6px;color:#111827}}
 .sign-grid{{margin-top:30px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;break-inside:avoid;page-break-inside:avoid}}
 .sign-box{{border-top:1px solid #64748b;padding-top:8px;min-height:42px;font-size:12px}}
 .muted{{color:#64748b;font-size:12px;margin-top:18px}}
@@ -10963,23 +10994,24 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
       <div><b>{txt['signed_date']}:</b> {html_escape(contract.get('signed_date') or '')}</div>
     </div>
   </div>
-  {scope_html}
+  {overview_html}
+  {terms_html}
   <section class="doc-section">
-  <h3>{txt['payment_plan']}</h3>
-  <table>
-    <thead><tr><th>{txt['node']}</th><th>{txt['valid_until']}</th><th>{txt['amount']}</th></tr></thead>
-    <tbody>{plan_rows}</tbody>
-  </table>
+    <h3>{txt['payment_plan']}</h3>
+    <table>
+      <thead><tr><th>{txt['node']}</th><th>{txt['valid_until']}</th><th>{txt['amount']}</th></tr></thead>
+      <tbody>{plan_rows}</tbody>
+    </table>
   </section>
   <div class="tot"><div class="tot-row total"><span>{txt['total']}</span><span>{money(contract.get('total_amount'))}</span></div></div>
   {note_html}
-  {terms_html}
   <h3 style="margin-top:14px;">{txt['signature']}</h3>
   <div class="sign-grid">
     <div class="sign-box">{txt['customer_signature']}：</div>
     <div class="sign-box">{txt['company_signature']}：</div>
   </div>
   {signature_hint_html}
+  {scope_html}
   <div class="muted">{html_escape(footer_meta_line or (brand.get('legal_name') or company_name))} | {txt['generated_at']} {html_escape(now_ts())}</div>
   <div class="muted">{html_escape(footer_disclaimer)}</div>
 </div>
