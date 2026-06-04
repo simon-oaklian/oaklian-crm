@@ -10704,7 +10704,10 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
                 p.name AS project_name,
                 p.address AS project_address,
                 p.project_type AS source_project_type,
-                e.project_type AS source_estimate_project_type
+                e.project_type AS source_estimate_project_type,
+                e.title AS source_estimate_title,
+                e.total_amount AS source_estimate_total,
+                e.status AS source_estimate_status
             FROM contracts ct
             LEFT JOIN customers c ON c.id = ct.customer_id
             LEFT JOIN projects p ON p.id = ct.project_id
@@ -10905,11 +10908,32 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
                 f"<tbody>{line_rows}</tbody></table></div>"
             )
         scope_body = "".join(scope_blocks) or f"<table><tbody><tr><td>{txt['no_line_items']}</td></tr></tbody></table>"
-        scope_html = (
-            f"<section class='doc-section exhibit-section'><h3>{txt.get('scope_exhibit', 'Exhibit A - Scope of Work')}</h3>"
-            f"<p class='exhibit-note'>{txt.get('scope_exhibit_note', 'The following detailed scope is incorporated into this Agreement as Exhibit A.')}</p>"
-            f"{scope_body}</section>"
-        )
+        source_estimate_id = contract.get("estimate_id")
+        if source_estimate_id:
+            try:
+                estimate_ref = f"Estimate / Proposal #{int(source_estimate_id):05d}"
+            except (TypeError, ValueError):
+                estimate_ref = "Approved Estimate / Proposal"
+            estimate_title = str(contract.get("source_estimate_title") or "").strip()
+            estimate_amount = contract.get("source_estimate_total") or contract.get("total_amount")
+            scope_html = (
+                "<section class='doc-section exhibit-reference-section'>"
+                f"<h3>{txt.get('scope_exhibit', 'Exhibit A - Scope of Work')}</h3>"
+                "<div class='exhibit-reference'>"
+                f"<div><b>Approved Estimate:</b> {html_escape(estimate_ref)}</div>"
+                f"<div><b>Project / Scope:</b> {html_escape(estimate_title or (contract.get('project_name') or contract.get('title') or '-'))}</div>"
+                f"<div><b>Approved Amount:</b> {money(estimate_amount)}</div>"
+                "<p>The approved estimate/proposal, including its scope, exclusions, and pricing details, is incorporated into this Agreement by reference as Exhibit A.</p>"
+                "</div></section>"
+            )
+        else:
+            scope_html = (
+                "<section class='doc-section exhibit-reference-section'>"
+                f"<h3>{txt.get('scope_exhibit', 'Exhibit A - Scope of Work')}</h3>"
+                "<div class='exhibit-reference'>"
+                "<p>The approved scope of work and any written change orders are incorporated into this Agreement by reference.</p>"
+                "</div></section>"
+            )
 
         plan_row_parts = []
         for idx, p in enumerate(plans, start=1):
@@ -11000,6 +11024,9 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
 .signature-section{{break-inside:avoid;page-break-inside:avoid;margin-top:20px}}
 .exhibit-section{{break-inside:auto;page-break-inside:auto;page-break-before:always;margin-top:0;border-top:2px solid #111827;padding-top:12px}}
 .exhibit-note{{font-size:11.5px;color:#64748b;margin:0 0 8px}}
+.exhibit-reference-section{{break-inside:avoid;page-break-inside:avoid}}
+.exhibit-reference{{border:1px solid #d1d5db;background:#f8fafc;padding:10px 12px;line-height:1.5;font-size:12px}}
+.exhibit-reference p{{margin:8px 0 0;color:#334155}}
 .scope-subsection{{break-inside:avoid;page-break-inside:avoid;margin:14px 0}}
 .scope-subsection h3{{font-size:13px;border-left:0;padding-left:0;margin:0 0 6px;color:#111827}}
 .sign-grid{{margin-top:30px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;break-inside:avoid;page-break-inside:avoid}}
@@ -11058,6 +11085,7 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
   </section>
   <div class="tot"><div class="tot-row total"><span>{txt['total']}</span><span>{money(contract.get('total_amount'))}</span></div></div>
   {note_html}
+  {scope_html}
   {terms_html}
   <section class="signature-section">
     <h3>{txt['signature']}</h3>
@@ -11067,7 +11095,6 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
     </div>
     {signature_hint_html}
   </section>
-  {scope_html}
   <div class="muted">{html_escape(footer_meta_line or (brand.get('legal_name') or company_name))} | {txt['generated_at']} {html_escape(now_ts())}</div>
   <div class="muted">{html_escape(footer_disclaimer)}</div>
 </div>
