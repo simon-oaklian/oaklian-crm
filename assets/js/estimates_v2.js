@@ -660,6 +660,10 @@
               <option value="en" ${(est.pdf_language === "en" || !est.pdf_language || (est.pdf_language !== "zh" && est.pdf_language !== "en")) ? "selected" : ""}>English</option>
             </select>
           </label>
+          <div class="ev2-pdf-notes-field">
+            <label class="ev2-label" for="ev2-pdf-notes-text">${tt("ev2_pdf_notes_label", "PDF 备注 / 说明")}</label>
+            <textarea class="ev2-input ev2-pdf-notes-text" id="ev2-pdf-notes-text" rows="4" placeholder="${tt("ev2_pdf_notes_placeholder", "输入这张报价要显示在 PDF 底部的备注。")}">${escHtml(est.pdf_notes_text || "")}</textarea>
+          </div>
         </div>
       </div>
     `;
@@ -900,6 +904,8 @@
       const el = $("#" + id);
       if (el) el.addEventListener("change", onPdfSettingChange);
     });
+    const pdfNotesText = $("#ev2-pdf-notes-text");
+    if (pdfNotesText) pdfNotesText.addEventListener("input", onPdfSettingChange);
   }
 
   function syncStageDropdowns() {
@@ -1415,6 +1421,7 @@
       pdf_show_labor: $("#ev2-pdf-show-labor").checked ? 1 : 0,
       pdf_show_pct: $("#ev2-pdf-show-pct").checked ? 1 : 0,
       pdf_show_notes: $("#ev2-pdf-show-notes").checked ? 1 : 0,
+      pdf_notes_text: $("#ev2-pdf-notes-text") ? $("#ev2-pdf-notes-text").value : "",
       pdf_language: $("#ev2-pdf-lang").value,
     };
     // 同步到当前 estimate 对象,这样导出 PDF 时立刻生效
@@ -1423,6 +1430,7 @@
     est.pdf_show_labor = body.pdf_show_labor;
     est.pdf_show_pct = body.pdf_show_pct;
     est.pdf_show_notes = body.pdf_show_notes;
+    est.pdf_notes_text = body.pdf_notes_text;
     est.pdf_language = body.pdf_language;
     debounce("pdf", async () => {
       try {

@@ -518,6 +518,21 @@
 
 .ev2-pdf-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
+.ev2-pdf-notes-field {
+  flex: 1 1 100%;
+}
+
+.ev2-pdf-notes-field .ev2-label {
+  cursor: default;
+  display: block;
+}
+
+.ev2-pdf-notes-text {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
 .ev2-divider { color: var(--ev2-border); }
 
 /* ========== 模态框 ========== */

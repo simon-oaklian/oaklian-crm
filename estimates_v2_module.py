@@ -1963,6 +1963,7 @@ _PDF_OPTION_FIELDS = [
     "pdf_show_material",
     "pdf_show_labor",
     "pdf_show_notes",
+    "pdf_notes_text",
     "pdf_language",
 ]
 
@@ -1981,6 +1982,8 @@ def _handle_pdf_options_save(handler, get_conn, eid):
             if f == "pdf_language":
                 if v not in ("zh", "en"):
                     v = "en"
+            elif f == "pdf_notes_text":
+                v = str(v or "").strip()
             else:
                 v = 1 if v else 0
             params.append(v)

@@ -571,6 +571,12 @@ def _build_css(brand):
   }}
 
   /* 备注 */
+  .remarks {{
+    margin: 4px 0 0 0;
+    font-size: 10px;
+    color: #555;
+    line-height: 1.55;
+  }}
   .remarks ul {{
     margin: 4px 0 0 0;
     padding-left: 18px;
@@ -1147,24 +1153,15 @@ def _render_payment(est, lang, show_pct):
 def _render_remarks(est, lang):
     if str(est.get("pdf_show_notes", 1)).strip().lower() in {"0", "false", "no"}:
         return ""
-    remarks = _LABELS.get(lang if lang != "both" else "zh", _LABELS["zh"])["default_remarks"]
-    if lang == "both":
-        en_remarks = _LABELS["en"]["default_remarks"]
-        items = []
-        for zh, en in zip(remarks, en_remarks):
-            items.append(f"<li>{_esc(zh)}<br><span style='color:#999;font-size:9.5px'>{_esc(en)}</span></li>")
-        return f"""
-        <div class="remarks-block pdf-block">
-        <h2 class='section-title'>{_L(lang, 'remarks')}</h2>
-        <div class='section-body remarks'><ul>{''.join(items)}</ul></div>
-        </div>
-        """
+    notes = str(est.get("pdf_notes_text") or "").strip()
+    if not notes:
+        return ""
+    lines = [line.strip() for line in notes.splitlines()]
+    note_html = "<br>".join(_esc(line) for line in lines)
     return f"""
     <div class="remarks-block pdf-block">
     <h2 class='section-title'>{_L(lang, 'remarks')}</h2>
-    <div class='section-body remarks'>
-      <ul>{''.join(f'<li>{_esc(r)}</li>' for r in remarks)}</ul>
-    </div>
+    <div class='section-body remarks'>{note_html}</div>
     </div>
     """
 

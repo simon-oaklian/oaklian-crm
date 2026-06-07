@@ -1265,6 +1265,7 @@ def init_db():
             "client_ip": "TEXT",
             "client_user_agent": "TEXT",
             "pdf_show_notes": "INTEGER DEFAULT 1",
+            "pdf_notes_text": "TEXT",
         },
     )
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_estimates_public_token ON estimates(public_token)")
