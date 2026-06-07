@@ -525,7 +525,7 @@ def _build_css(brand):
     color: {primary};
   }}
   /* 短块尽量整块换页,不要把标题留在上一页 */
-  .summary-block, .payment-block, .remarks-block, .customer-block {{
+  .summary-block, .payment-block, .customer-block {{
     page-break-inside: avoid;
     break-inside: avoid;
   }}
@@ -585,6 +585,14 @@ def _build_css(brand):
   }}
   .remarks-block h2.section-title {{
     margin-top: 8px;
+  }}
+  .remarks-block {{
+    page-break-inside: auto;
+    break-inside: auto;
+  }}
+  .remarks-block .section-body {{
+    page-break-inside: auto;
+    break-inside: auto;
   }}
   .remarks li {{ margin-bottom: 3px; page-break-inside: avoid; break-inside: avoid; }}
 
@@ -673,8 +681,7 @@ def _build_css(brand):
       display: none !important;
     }}
     .running-footer {{
-      display: block !important;
-      position: fixed;
+      display: none !important;
     }}
     body {{
       padding-top: 0;
@@ -750,9 +757,14 @@ def _build_css(brand):
 
     h2.section-title {{ break-after: avoid; }}
     .est-section-title {{ break-after: avoid; }}
-    .pdf-block, .summary-block, .payment-block, .remarks-block, .customer-block {{
+    .pdf-block, .summary-block, .payment-block, .customer-block {{
       break-inside: avoid;
       page-break-inside: avoid;
+    }}
+    .remarks-block,
+    .remarks-block .section-body {{
+      break-inside: auto;
+      page-break-inside: auto;
     }}
     .details-block, .estimate-section-block {{
       break-inside: auto;
@@ -1159,7 +1171,7 @@ def _render_remarks(est, lang):
     lines = [line.strip() for line in notes.splitlines()]
     note_html = "<br>".join(_esc(line) for line in lines)
     return f"""
-    <div class="remarks-block pdf-block">
+    <div class="remarks-block">
     <h2 class='section-title'>{_L(lang, 'remarks')}</h2>
     <div class='section-body remarks'>{note_html}</div>
     </div>
