@@ -3611,6 +3611,34 @@ function setPageHeader() {
     const roleLabel = state.user.role === "owner" ? t("role_owner") : state.user.role === "designer" ? t("role_designer") : t("role_manager");
     q("#user-meta").textContent = `${state.user.username} / ${roleLabel}`;
   }
+  updateMobileBackButton();
+}
+
+function mobileBackText() {
+  if (state.locale === "en") return "Back to List";
+  if (state.locale === "es") return "Volver a la lista";
+  return "\u8fd4\u56de\u5217\u8868";
+}
+
+function updateMobileBackButton() {
+  const topbar = q(".topbar");
+  if (!topbar) return;
+  let btn = q("#mobile-back-btn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "mobile-back-btn";
+    btn.type = "button";
+    btn.className = "mobile-back-btn secondary hidden";
+    btn.addEventListener("click", async () => {
+      closeNotificationPopover();
+      state.editId = null;
+      state.module = "dashboard";
+      await renderApp();
+    });
+    topbar.parentNode.insertBefore(btn, topbar);
+  }
+  btn.textContent = "‹ " + t("dashboard");
+  btn.classList.toggle("hidden", state.module === "dashboard");
 }
 
 // K_NAV_REWORK_V3_APPLIED -- parent menu renders identical to siblings, no arrow, no special class
@@ -5007,7 +5035,10 @@ function crudScaffold(module) {
         ${isCustomerCrud ? `<div id="customer-mobile-cards" class="customer-mobile-cards"></div>` : `<div id="crud-mobile-cards" class="crud-mobile-cards"></div>`}
       </article>
       ${isDocumentsReadOnly ? "" : `<article class="panel crud-form-panel">
-        <h3 id="form-title">${t("create")}</h3>
+        <div class="crud-form-head">
+          <h3 id="form-title">${t("create")}</h3>
+          <button id="form-close-btn" type="button" class="secondary">${mobileBackText()}</button>
+        </div>
         <form id="entity-form"></form>
         <div class="row gap form-actions">
           <button id="save-btn">${t("save")}</button>
@@ -8081,6 +8112,17 @@ async function renderCrud(module) {
   if (module === "change_orders") await renderChangeOrderProjectFilter();
 
   q("#search-btn")?.addEventListener("click", () => loadCrud(module));
+  q("#form-close-btn")?.addEventListener("click", () => {
+    state.editId = null;
+    if (module === "contracts") state.editingMilestoneId = null;
+    if (module === "projects") {
+      state.projectTemplateOriginalId = null;
+      state.projectTemplateSwitchConfirmed = false;
+      state.projectTemplateHasStages = false;
+    }
+    renderForm(module);
+    if (module === "customers") closeCustomerFormDialog();
+  });
   if (module === "customers") {
     if (q("#customer-source-filter")) {
       q("#customer-source-filter").addEventListener("change", async () => {

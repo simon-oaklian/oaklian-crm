@@ -1934,6 +1934,263 @@ button:active:not(:disabled),
   }
 }
 
+/* Mobile app shell: keep phone pages compact, single-column, and returnable. */
+.mobile-back-btn {
+  display: none;
+}
+.crud-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.crud-form-head h3 {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  html,
+  body,
+  .layout {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+  .layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar {
+    flex: 0 0 auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .sidebar .menu,
+  body[data-module="dashboard"] .sidebar .menu {
+    display: none;
+  }
+  .brand-lockup,
+  body[data-module="dashboard"] .brand-lockup,
+  body:not([data-module="dashboard"]) .brand-lockup {
+    min-height: 46px;
+    margin: 0;
+  }
+  .brand-icon,
+  body[data-module="dashboard"] .brand-icon,
+  body:not([data-module="dashboard"]) .brand-icon {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+  .sidebar h1,
+  body[data-module="dashboard"] .sidebar h1,
+  body:not([data-module="dashboard"]) .sidebar h1 {
+    font-size: 19px;
+    line-height: 0.96;
+  }
+  #brand-subtitle,
+  body[data-module="dashboard"] #brand-subtitle,
+  body:not([data-module="dashboard"]) #brand-subtitle {
+    font-size: 10px;
+    letter-spacing: 1.3px;
+  }
+  .brand-tagline {
+    display: none;
+  }
+  .content {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px;
+  }
+  .mobile-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  body[data-module="dashboard"] .mobile-back-btn {
+    display: none;
+  }
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+  .topbar h2 {
+    font-size: 24px;
+    line-height: 1.1;
+  }
+  .topbar p {
+    display: none;
+  }
+  .top-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .top-actions button,
+  .top-actions select,
+  .user-meta {
+    min-height: 34px;
+    padding: 6px 7px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .notif-badge {
+    min-width: 17px;
+    height: 17px;
+    font-size: 10px;
+    line-height: 17px;
+  }
+  #main {
+    height: calc(100dvh - 138px);
+    min-height: 0;
+    overflow: hidden;
+  }
+  body[data-module="dashboard"] #main {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .panel {
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .crud-layout,
+  .grid-main {
+    height: 100%;
+    min-height: 0;
+  }
+  .crud-list-panel {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .crud-layout .crud-toolbar,
+  .customer-modal-crud .crud-toolbar {
+    flex: 0 0 auto;
+    grid-template-columns: 1fr 68px 68px;
+    gap: 6px;
+  }
+  .crud-layout .crud-toolbar input,
+  .crud-layout .crud-toolbar select,
+  .crud-layout .crud-toolbar button {
+    min-height: 36px;
+    border-radius: 8px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+  .customer-mobile-cards,
+  .crud-mobile-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    margin-top: 8px;
+    padding-right: 2px;
+  }
+  .customer-mobile-card {
+    padding: 10px;
+    border-radius: 9px;
+    box-shadow: none;
+  }
+  .customer-mobile-card-main {
+    grid-template-columns: minmax(0, 1fr) minmax(104px, 118px);
+    gap: 8px;
+  }
+  .customer-mobile-title {
+    font-size: 16px;
+  }
+  .customer-mobile-phone,
+  .customer-mobile-meta {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .customer-mobile-meta {
+    gap: 2px;
+    margin-top: 7px;
+  }
+  .customer-mobile-card select {
+    min-height: 34px;
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+  .customer-mobile-actions {
+    gap: 6px;
+    margin-top: 9px;
+  }
+  .customer-mobile-actions button {
+    min-height: 34px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .customer-modal-crud.customer-form-open .crud-form-panel {
+    position: fixed;
+    inset: 8px;
+    top: 8px;
+    left: 8px;
+    width: auto;
+    height: calc(100dvh - 16px);
+    max-height: none;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 10px;
+    border-radius: 12px;
+  }
+  .customer-modal-crud.customer-form-open .crud-form-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    background: #fff;
+  }
+  .customer-modal-crud.customer-form-open .crud-form-head h3 {
+    font-size: 18px;
+  }
+  #form-close-btn {
+    min-height: 32px;
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+  .customer-modal-crud.customer-form-open #entity-form {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 8px;
+  }
+  .customer-modal-crud.customer-form-open .form-actions {
+    flex: 0 0 auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    background: #fff;
+  }
+  .customer-modal-crud.customer-form-open .form-actions button {
+    min-height: 36px;
+    flex: 1 1 0;
+  }
+  .customer-modal-crud.customer-form-open #customer-estimate-panel,
+  .customer-modal-crud.customer-form-open #customer-followup-panel,
+  .customer-modal-crud.customer-form-open #customer-designer-assignment-panel,
+  .customer-modal-crud.customer-form-open #customer-file-panel,
+  .customer-modal-crud.customer-form-open #quick-lead-panel {
+    display: none;
+  }
+}
+
 /* K_NAV_REWORK_APPLIED -- collapsible parent submenu in left nav */
 /* K_NAV_REWORK_V3_APPLIED -- parent button identical to siblings (no custom CSS); only collapse container + lightweight children */
 .menu .menu-parent {
