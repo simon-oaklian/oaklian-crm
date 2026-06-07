@@ -1668,7 +1668,7 @@ button:active:not(:disabled),
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   html,
   body {
     width: 100%;
@@ -2089,6 +2089,7 @@ button:active:not(:disabled),
   }
   .customer-mobile-cards,
   .crud-mobile-cards {
+    display: grid;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -2096,6 +2097,10 @@ button:active:not(:disabled),
     gap: 8px;
     margin-top: 8px;
     padding-right: 2px;
+  }
+  .crud-layout .table-wrap,
+  .customer-modal-crud .table-wrap {
+    display: none;
   }
   .customer-mobile-card {
     padding: 10px;

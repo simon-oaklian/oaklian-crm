@@ -6395,7 +6395,15 @@ function bindCrudMobileCards() {
   host.dataset.bound = "1";
   host.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
+    if (!btn) {
+      const card = e.target.closest(".crud-mobile-card");
+      const rowId = card?.dataset?.rowId;
+      if (!rowId) return;
+      const tableBtn = Array.from(document.querySelectorAll(`#table button[data-act="edit"]`))
+        .find((x) => String(x.dataset.id || "") === String(rowId));
+      if (tableBtn) tableBtn.click();
+      return;
+    }
     const act = btn.dataset.act || "";
     const id = String(btn.dataset.id || "");
     const tableBtn = Array.from(document.querySelectorAll("#table button[data-act]"))
@@ -8306,9 +8314,51 @@ async function renderCrud(module) {
     q("#tpl-create-btn")?.addEventListener("click", createTemplateFromPanel); // J_PATCH_APPLIED guard
   }
 
+  async function openRowForEditing(id) {
+    if (!id || module === "documents") return;
+    if (module === "estimates") {
+      await openEstimateDetail(id);
+      return;
+    }
+    if (module === "contracts") {
+      await openContractDetail(id);
+      return;
+    }
+    if (module === "projects") {
+      await openProjectDetail(id);
+      return;
+    }
+    if (module === "change_orders") {
+      await openChangeOrderDetail(id);
+      return;
+    }
+    const apiBase = moduleApiBase(module);
+    const row = await api(`${apiBase}/${id}`);
+    state.editId = id;
+    renderForm(module, row);
+    if (module === "customers") {
+      await renderCustomerEstimatePanel(row);
+      await renderCustomerFollowupPanel(row);
+      await renderEntityAttachmentPanel({
+        hostSelector: "#customer-file-panel",
+        entityType: "customer",
+        entityId: row.id,
+        title: t("attachments"),
+        defaultCategory: "other",
+      });
+      openCustomerFormDialog();
+    }
+  }
+
   q("#table")?.addEventListener("click", async (e) => { // J_PATCH_APPLIED guard
     const btn = e.target.closest("button");
-    if (!btn) return;
+    if (!btn) {
+      const row = e.target.closest("tr.data-row");
+      const rowId = row?.dataset?.rowId;
+      const isCompact = window.matchMedia && window.matchMedia("(max-width: 1024px)").matches;
+      if (rowId && isCompact) await openRowForEditing(rowId);
+      return;
+    }
     const id = btn.dataset.id;
     const act = btn.dataset.act;
     if (!id) return;
@@ -8472,37 +8522,7 @@ async function renderCrud(module) {
       return;
     }
     if (act === "edit") {
-      const row = await api(`${apiBase}/${id}`);
-      state.editId = id;
-      if (module === "contracts") {
-        state.contractMilestoneContractId = Number(id);
-        state.editingMilestoneId = null;
-        await renderContractMilestonePanel();
-        await renderContractChangeOrderPanel(row);
-      }
-      renderForm(module, row);
-      if (module === "customers") {
-        await renderCustomerEstimatePanel(row);
-        await renderCustomerFollowupPanel(row);
-        await renderEntityAttachmentPanel({
-          hostSelector: "#customer-file-panel",
-          entityType: "customer",
-          entityId: row.id,
-          title: t("attachments"),
-          defaultCategory: "other",
-        });
-        openCustomerFormDialog();
-      }
-      if (module === "estimates" || module === "contracts") {
-        await renderRecordLinkPanel(module, row);
-        await renderEntityAttachmentPanel({
-          hostSelector: "#record-file-panel",
-          entityType: module === "estimates" ? "estimate" : "contract",
-          entityId: row.id,
-          title: module === "estimates" ? t("estimate_attachments") : t("contract_attachments"),
-          defaultCategory: module === "estimates" ? "estimate" : "contract",
-        });
-      }
+      await openRowForEditing(id);
       return;
     }
     if (act === "mark-sent" && module === "change_orders") {
