@@ -3735,6 +3735,7 @@ async function openCustomerDetail(customerId) {
     title: t("attachments"),
     defaultCategory: "other",
   });
+  openCustomerFormDialog();
 }
 
 async function openEstimateDetail(estimateId) {
@@ -4946,8 +4947,9 @@ function crudScaffold(module) {
     : "";
   // J_PATCH_APPLIED: documents is read-only -> no create button, no form panel
   const isDocumentsReadOnly = module === "documents";
+  const isCustomerCrud = module === "customers";
   q("#main").innerHTML = `
-    <section class="grid-main crud-layout${isDocumentsReadOnly ? " crud-layout-readonly" : ""}">
+    <section class="grid-main crud-layout${isDocumentsReadOnly ? " crud-layout-readonly" : ""}${isCustomerCrud ? " customer-modal-crud" : ""}" id="crud-layout">
       <article class="panel crud-list-panel">
         <div class="row gap crud-toolbar">
           <input id="keyword" placeholder="keyword" />
@@ -4984,6 +4986,15 @@ function crudScaffold(module) {
     </section>
   `;
   // J_PATCH_APPLIED: end of conditional form panel wrapper
+}
+
+function openCustomerFormDialog() {
+  if (state.module !== "customers") return;
+  q("#crud-layout")?.classList.add("customer-form-open");
+}
+
+function closeCustomerFormDialog() {
+  q("#crud-layout")?.classList.remove("customer-form-open");
 }
 
 function renderForm(module, row = {}) {
@@ -7810,6 +7821,7 @@ async function renderCrud(module) {
   crudScaffold(module);
   if (q("#pdf-lang-select")) q("#pdf-lang-select").value = state.pdfLang;
   renderForm(module);
+  if (module === "customers") closeCustomerFormDialog();
   if (module === "customers") {
     await renderCustomerEstimatePanel(null);
     await renderCustomerFollowupPanel(null);
@@ -7899,6 +7911,7 @@ async function renderCrud(module) {
         title: t("attachments"),
         defaultCategory: "other",
       });
+      openCustomerFormDialog();
     }
     if (module === "estimates" || module === "contracts") {
       renderRecordLinkPanel(module, null);
@@ -7961,6 +7974,7 @@ async function renderCrud(module) {
         title: t("attachments"),
         defaultCategory: "other",
       });
+      closeCustomerFormDialog();
     }
     if (module === "estimates" || module === "contracts") {
       await renderRecordLinkPanel(module, null);
@@ -7995,6 +8009,7 @@ async function renderCrud(module) {
         title: t("attachments"),
         defaultCategory: "other",
       });
+      closeCustomerFormDialog();
     }
     if (module === "estimates" || module === "contracts") {
       renderRecordLinkPanel(module, null);
@@ -8204,6 +8219,7 @@ async function renderCrud(module) {
           title: t("attachments"),
           defaultCategory: "other",
         });
+        openCustomerFormDialog();
       }
       if (module === "estimates" || module === "contracts") {
         await renderRecordLinkPanel(module, row);
