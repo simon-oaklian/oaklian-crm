@@ -4964,6 +4964,7 @@ function crudScaffold(module) {
           ${pdfLangCtl}
         </div>
         <div class="table-wrap"><table id="table"></table></div>
+        ${isCustomerCrud ? `<div id="customer-mobile-cards" class="customer-mobile-cards"></div>` : ""}
       </article>
       ${isDocumentsReadOnly ? "" : `<article class="panel crud-form-panel">
         <h3 id="form-title">${t("create")}</h3>
@@ -6172,6 +6173,46 @@ function renderTable(module, rows, progressMap = {}) {
       await loadCrud("projects");
     });
   }
+  if (module === "customers") {
+    renderCustomerMobileCards(rows);
+  }
+}
+
+function renderCustomerMobileCards(rows = []) {
+  const host = q("#customer-mobile-cards");
+  if (!host) return;
+  if (!rows.length) {
+    host.innerHTML = `<div class="customer-mobile-empty">${t("no_data") || "-"}</div>`;
+    return;
+  }
+  host.innerHTML = rows.map((r) => {
+    const status = r.status || "new";
+    const updated = r.updated_at || r.created_at || "-";
+    return `
+      <article class="customer-mobile-card" data-row-id="${esc(r.id ?? "")}">
+        <div class="customer-mobile-card-main">
+          <div>
+            <div class="customer-mobile-title">${esc(r.name || "-")}</div>
+            <div class="customer-mobile-phone">${esc(r.phone || "-")}</div>
+          </div>
+          <select data-act="customer-status" data-id="${esc(r.id ?? "")}" aria-label="${esc(fieldLabel("status"))}">
+            ${renderOptionList(CUSTOMER_STATUS_FLOW, status, "status")}
+          </select>
+        </div>
+        <div class="customer-mobile-meta">
+          <span>${esc(fieldLabel("source_channel"))}: ${displayValue("source_channel", r.source_channel || "-")}</span>
+          <span>${esc(fieldLabel("inquiry_type"))}: ${displayValue("inquiry_type", r.inquiry_type || "-")}</span>
+          <span>${esc(fieldLabel("updated_at"))}: ${esc(updated)}</span>
+        </div>
+        <div class="customer-mobile-actions">
+          <button data-act="gen-estimate-cust" data-id="${esc(r.id ?? "")}">${t("generate_estimate")}</button>
+          <button data-act="quick-followup-cust" data-id="${esc(r.id ?? "")}" class="secondary">${t("quick_followup")}</button>
+          <button data-act="edit" data-id="${esc(r.id ?? "")}" class="secondary">${t("edit")}</button>
+          <button data-act="del" data-id="${esc(r.id ?? "")}" class="danger">${t("del")}</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
 function collectForm() {
@@ -8352,6 +8393,66 @@ async function renderCrud(module) {
           title: t("attachments"),
           defaultCategory: "other",
         });
+      }
+    });
+    q("#customer-mobile-cards")?.addEventListener("change", async (e) => {
+      const sel = e.target.closest("select[data-act='customer-status']");
+      if (!sel) return;
+      const customerId = sel.dataset.id;
+      const status = sel.value;
+      await api(`/api/customers/${customerId}`, { method: "PUT", body: JSON.stringify({ status }) });
+      await loadCrud("customers");
+      if (state.editId && String(state.editId) === String(customerId)) {
+        const row = await api(`/api/customers/${customerId}`);
+        renderForm("customers", row);
+        await renderCustomerEstimatePanel(row);
+        await renderCustomerFollowupPanel(row);
+        await renderEntityAttachmentPanel({
+          hostSelector: "#customer-file-panel",
+          entityType: "customer",
+          entityId: row.id,
+          title: t("attachments"),
+          defaultCategory: "other",
+        });
+      }
+    });
+    q("#customer-mobile-cards")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      const id = btn.dataset.id;
+      const act = btn.dataset.act;
+      if (!id) return;
+      if (act === "gen-estimate-cust") {
+        const r = await api(`/api/customers/${id}/generate-estimate`, { method: "POST" });
+        await loadCrud("customers");
+        await openEstimateDetail(r.estimate?.id);
+        return;
+      }
+      if (act === "quick-followup-cust") {
+        await quickAddFollowupFromList(id);
+        await loadCrud("customers");
+        return;
+      }
+      if (act === "edit") {
+        const row = await api(`/api/customers/${id}`);
+        state.editId = id;
+        renderForm("customers", row);
+        await renderCustomerEstimatePanel(row);
+        await renderCustomerFollowupPanel(row);
+        await renderEntityAttachmentPanel({
+          hostSelector: "#customer-file-panel",
+          entityType: "customer",
+          entityId: row.id,
+          title: t("attachments"),
+          defaultCategory: "other",
+        });
+        openCustomerFormDialog();
+        return;
+      }
+      if (act === "del") {
+        if (!confirm(t("confirm_del"))) return;
+        await api(`/api/customers/${id}`, { method: "DELETE" });
+        await loadCrud("customers");
       }
     });
   }

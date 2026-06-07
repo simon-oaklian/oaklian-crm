@@ -428,6 +428,60 @@ button:disabled {
 .customer-modal-crud.customer-form-open .crud-form-panel h3 {
   margin-top: 0;
 }
+.customer-mobile-cards {
+  display: none;
+}
+.customer-mobile-empty {
+  color: var(--sub);
+  padding: 16px;
+  text-align: center;
+}
+.customer-mobile-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+.customer-mobile-card-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 150px);
+  gap: 10px;
+  align-items: start;
+}
+.customer-mobile-title {
+  font-weight: 800;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.25;
+}
+.customer-mobile-phone {
+  color: var(--sub);
+  margin-top: 3px;
+  font-size: 13px;
+}
+.customer-mobile-card select {
+  width: 100%;
+  min-height: 38px;
+}
+.customer-mobile-meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.customer-mobile-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.customer-mobile-actions button {
+  min-height: 40px;
+  padding: 8px 10px;
+}
 .stage-template-layout .stage-template-list-panel { min-width: 0; }
 .stage-template-layout .stage-template-editor-panel {
   min-width: 0;
@@ -1502,6 +1556,35 @@ button:active:not(:disabled),
   .stage-custom-row { grid-template-columns: 1fr; }
   .stage-template-step-row { grid-template-columns: 1fr; }
   .data-table-contracts .action-cell { min-width: 260px; }
+  .customer-modal-crud .crud-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 76px 76px;
+    align-items: stretch;
+  }
+  .customer-modal-crud .crud-toolbar #keyword {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .customer-modal-crud .crud-toolbar select {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+  .customer-modal-crud .table-wrap {
+    display: none;
+  }
+  .customer-mobile-cards {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .customer-mobile-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .customer-modal-crud.customer-form-open .crud-form-panel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
 }
 
 @media (pointer: coarse) {
