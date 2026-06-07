@@ -1496,8 +1496,49 @@ button:active:not(:disabled),
 
 @media (max-width: 1024px) {
   .layout { grid-template-columns: 1fr; height: auto; overflow: visible; }
-  .sidebar { height: 100vh; min-height: 0; }
-  .menu { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+  .sidebar {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    padding: 12px 12px 10px;
+  }
+  .brand-lockup {
+    min-height: 52px;
+    margin-bottom: 4px;
+  }
+  .brand-icon {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+  }
+  .sidebar h1 {
+    font-size: 22px;
+    line-height: 0.98;
+  }
+  #brand-subtitle {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+  }
+  .brand-tagline {
+    margin: 4px 0 10px;
+    font-size: 10px;
+  }
+  .menu {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 2px 8px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .menu button {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 104px;
+    white-space: nowrap;
+    text-align: center;
+  }
   .content { height: auto; overflow: visible; }
   .grid-main { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
