@@ -4274,6 +4274,44 @@ async function refreshOwnerDashboardSections(options = {}) {
   const pendingChangeOrdersAll = (changeOrders || []).filter((x) => normalizeEnum(x.status || x.signed_status || "draft") === "sent");
   const refreshAll = async () => refreshOwnerDashboardSections({ tasks: true, kpis: true, recent: true });
 
+  const mobileHub = q("#dashboard-mobile-hub");
+  if (mobileHub) {
+    mobileHub.innerHTML = `
+      <div class="dashboard-mobile-hub-grid">
+        <button type="button" data-dash-nav="customers">
+          <span>${t("todo_followups_due")}</span>
+          <b>${fmt(dueRowsAll.length)}</b>
+        </button>
+        <button type="button" data-dash-nav="estimates">
+          <span>${t("todo_estimate_confirm")}</span>
+          <b>${fmt(pendingEstimateConfirmationsAll.length)}</b>
+        </button>
+        <button type="button" data-dash-nav="contracts">
+          <span>${t("todo_contract_sign")}</span>
+          <b>${fmt(pendingContractSigningsAll.length)}</b>
+        </button>
+        <button type="button" data-dash-nav="contracts">
+          <span>${t("todo_payment_reminder")}</span>
+          <b>${fmt(paymentRemindersAll.length)}</b>
+        </button>
+        <button type="button" data-dash-nav="change_orders">
+          <span>${t("todo_change_order_pending")}</span>
+          <b>${fmt(pendingChangeOrdersAll.length)}</b>
+        </button>
+        <button type="button" data-dash-nav="projects">
+          <span>${t("recent_project_updates")}</span>
+          <b>${fmt((projects || []).length)}</b>
+        </button>
+      </div>
+      <div class="dashboard-mobile-kpis">
+        <div><span>${t("monthly_new_leads")}</span><b>${fmt(data.cards.monthly_new_leads || 0)}</b></div>
+        <div><span>${t("monthly_estimates_sent")}</span><b>${fmt(data.cards.monthly_estimates_sent || 0)}</b></div>
+        <div><span>${t("monthly_contracts_signed")}</span><b>${fmt(data.cards.monthly_contracts_signed || 0)}</b></div>
+        <div><span>${t("monthly_ar_received")}</span><b>${fmtMoney(data.cards.monthly_ar_received || 0)}</b></div>
+      </div>
+    `;
+  }
+
   if (opts.tasks) {
     const dueRows = dueRowsAll.slice(0, 5);
     const pendingEstimateConfirmations = pendingEstimateConfirmationsAll.slice(0, 5);
@@ -4511,25 +4549,14 @@ async function refreshOwnerDashboardSections(options = {}) {
 async function renderDashboard() {
   q("#main").innerHTML = `
     <section id="dashboard-home" class="dashboard-owner">
-      <div class="dashboard-mobile-tabs" role="tablist" aria-label="Dashboard sections">
-        <button type="button" class="active" data-dashboard-mobile-tab="tasks">${t("dashboard_todo_priority")}</button>
-        <button type="button" data-dashboard-mobile-tab="kpis">${t("dashboard_monthly_overview")}</button>
-        <button type="button" data-dashboard-mobile-tab="recent">${t("dashboard_recent_activity")}</button>
-      </div>
+      <div class="dashboard-mobile-hub" id="dashboard-mobile-hub"></div>
 
-      <div class="dashboard-layer active" data-dashboard-mobile-panel="tasks">
+      <div class="dashboard-layer" data-dashboard-mobile-panel="tasks">
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_todo_priority")}</h3>
         </div>
-        <div class="dashboard-mobile-card-tabs" data-dashboard-card-tabs="tasks">
-          <button type="button" class="active" data-dashboard-card-target="todo-followups-card">${t("todo_followups_due")}</button>
-          <button type="button" data-dashboard-card-target="todo-estimates-card">${t("todo_estimate_confirm")}</button>
-          <button type="button" data-dashboard-card-target="todo-contracts-card">${t("todo_contract_sign")}</button>
-          <button type="button" data-dashboard-card-target="todo-payment-card">${t("todo_payment_reminder")}</button>
-          <button type="button" data-dashboard-card-target="todo-change-orders-card">${t("todo_change_order_pending")}</button>
-        </div>
         <div class="dashboard-todo-grid">
-          <article class="panel todo-card mobile-card-active" id="todo-followups-card"></article>
+          <article class="panel todo-card" id="todo-followups-card"></article>
           <article class="panel todo-card" id="todo-estimates-card"></article>
           <article class="panel todo-card" id="todo-contracts-card"></article>
           <article class="panel todo-card" id="todo-payment-card"></article>
@@ -4548,14 +4575,8 @@ async function renderDashboard() {
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_recent_activity")}</h3>
         </div>
-        <div class="dashboard-mobile-card-tabs" data-dashboard-card-tabs="recent">
-          <button type="button" class="active" data-dashboard-card-target="recent-projects-card">${t("recent_project_updates")}</button>
-          <button type="button" data-dashboard-card-target="recent-uploads-card">${t("recent_uploads")}</button>
-          <button type="button" data-dashboard-card-target="recent-notifications-card">${t("recent_notifications")}</button>
-          <button type="button" data-dashboard-card-target="recent-change-orders-card">${t("recent_change_orders")}</button>
-        </div>
         <div class="dashboard-recent-grid">
-          <article class="panel recent-card mobile-card-active" id="recent-projects-card"></article>
+          <article class="panel recent-card" id="recent-projects-card"></article>
           <article class="panel recent-card" id="recent-uploads-card"></article>
           <article class="panel recent-card" id="recent-notifications-card"></article>
           <article class="panel recent-card" id="recent-change-orders-card"></article>
@@ -4563,27 +4584,6 @@ async function renderDashboard() {
       </div>
     </section>
   `;
-  q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.dashboardMobileTab;
-      q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-tab]").forEach((x) => x.classList.toggle("active", x === btn));
-      q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-panel]").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.dashboardMobilePanel === key);
-      });
-    });
-  });
-  q("#dashboard-home")?.querySelectorAll("[data-dashboard-card-target]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const target = btn.dataset.dashboardCardTarget;
-      const group = btn.closest("[data-dashboard-card-tabs]");
-      const layer = btn.closest("[data-dashboard-mobile-panel]");
-      if (!target || !group || !layer) return;
-      group.querySelectorAll("[data-dashboard-card-target]").forEach((x) => x.classList.toggle("active", x === btn));
-      layer.querySelectorAll(".todo-card, .recent-card").forEach((card) => {
-        card.classList.toggle("mobile-card-active", card.id === target);
-      });
-    });
-  });
   await refreshOwnerDashboardSections({ tasks: true, kpis: true, recent: true });
 }
 

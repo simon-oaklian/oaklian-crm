@@ -328,6 +328,9 @@ button:disabled {
 .dashboard-mobile-card-tabs {
   display: none;
 }
+.dashboard-mobile-hub {
+  display: none;
+}
 .dashboard-layer {
   display: grid;
   gap: 10px;
@@ -1530,24 +1533,24 @@ button:active:not(:disabled),
     font-size: 10px;
   }
   .menu {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     flex: 0 0 auto;
-    gap: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 2px 8px;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    overflow: visible;
+    padding: 0;
   }
   .menu button {
-    flex: 0 0 auto;
-    width: auto;
-    min-width: 104px;
-    min-height: 42px;
-    padding: 9px 12px;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 7px 6px;
     white-space: nowrap;
     text-align: center;
-    border-radius: 9px;
+    border-radius: 8px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .content { height: auto; overflow: visible; }
   .grid-main { grid-template-columns: 1fr; }
@@ -1596,115 +1599,99 @@ button:active:not(:disabled),
 }
 
 @media (max-width: 768px) {
-  .content { padding: 10px; }
+  .content { padding: 10px; min-height: 0; }
+  .topbar {
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+  }
   .topbar h2 { font-size: 22px; }
+  .topbar p {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+  .top-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+  .top-actions > select,
+  .top-actions > button,
+  .top-actions > .notif-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+  .top-actions button,
+  .top-actions select {
+    min-height: 38px;
+    padding: 7px 8px;
+    font-size: 13px;
+  }
   .cards.cards-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card .v { font-size: 22px; }
   .dashboard-owner {
-    gap: 10px;
+    gap: 8px;
   }
-  .dashboard-mobile-tabs {
-    position: sticky;
-    top: 0;
-    z-index: 8;
+  .dashboard-mobile-hub {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    padding: 6px 0;
-    background: linear-gradient(140deg, #F1F5F9, #eef2f6 40%, #e9eff9);
+    gap: 8px;
   }
-  .dashboard-mobile-tabs button {
-    min-height: 38px;
-    padding: 7px 8px;
+  .dashboard-mobile-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .dashboard-mobile-hub-grid button {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 64px;
+    padding: 10px;
     border-radius: 8px;
     background: #fff;
+    border: 1px solid var(--line);
     color: var(--ink);
-    border-color: var(--line);
+    text-align: left;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  }
+  .dashboard-mobile-hub-grid button span {
+    min-width: 0;
     font-size: 13px;
-    white-space: nowrap;
-  }
-  .dashboard-mobile-tabs button.active {
-    background: var(--main);
-    border-color: var(--main);
-    color: #fff;
-  }
-  .dashboard-mobile-card-tabs {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 0 6px;
-    -webkit-overflow-scrolling: touch;
-  }
-  .dashboard-mobile-card-tabs button {
-    flex: 0 0 auto;
-    min-height: 34px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #fff;
-    color: var(--ink);
-    border-color: var(--line);
-    font-size: 12px;
-    white-space: nowrap;
-  }
-  .dashboard-mobile-card-tabs button.active {
-    background: #dcfce7;
-    border-color: #9fe2bf;
-    color: var(--main);
-    font-weight: 800;
-  }
-  .dashboard-owner .dashboard-layer {
-    display: none;
-  }
-  .dashboard-owner .dashboard-layer.active {
-    display: grid;
-  }
-  .dashboard-layer-head {
-    display: none;
-  }
-  .dashboard-todo-grid,
-  .dashboard-recent-grid {
-    display: block;
-    overflow: visible;
-    padding: 0;
-  }
-  .dashboard-todo-grid > .panel,
-  .dashboard-recent-grid > .panel {
-    display: none;
-    width: 100%;
-    min-height: 0;
-    max-height: calc(100vh - 250px);
-  }
-  .dashboard-todo-grid > .panel.mobile-card-active,
-  .dashboard-recent-grid > .panel.mobile-card-active {
-    display: block;
-  }
-  .todo-card-head {
-    align-items: flex-start;
-  }
-  .todo-card-head h4 {
-    font-size: 16px;
+    font-weight: 700;
     line-height: 1.25;
   }
-  .todo-list,
-  .recent-list {
-    max-height: calc(100vh - 360px);
-    overflow: auto;
-  }
-  .dashboard-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-top: 0;
-  }
-  .dashboard-kpi-grid .card {
-    min-height: 76px;
-    padding: 10px;
-  }
-  .dashboard-kpi-grid .card .k {
-    font-size: 12px;
-    line-height: 1.25;
-  }
-  .dashboard-kpi-grid .card .v {
+  .dashboard-mobile-hub-grid button b {
+    min-width: 30px;
     font-size: 22px;
+    text-align: right;
+  }
+  .dashboard-mobile-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .dashboard-mobile-kpis div {
+    min-height: 56px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #fff;
+  }
+  .dashboard-mobile-kpis span {
+    display: block;
+    color: var(--sub);
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  .dashboard-mobile-kpis b {
+    display: block;
+    margin-top: 3px;
+    font-size: 18px;
+    line-height: 1.15;
+  }
+  .dashboard-owner > .dashboard-layer {
+    display: none;
   }
   .drawer-panel { width: 100vw; }
   .crm-modal-panel { width: 96vw; max-height: 90vh; }
