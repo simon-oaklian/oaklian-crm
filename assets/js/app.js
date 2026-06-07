@@ -5004,7 +5004,7 @@ function crudScaffold(module) {
           ${pdfLangCtl}
         </div>
         <div class="table-wrap"><table id="table"></table></div>
-        ${isCustomerCrud ? `<div id="customer-mobile-cards" class="customer-mobile-cards"></div>` : ""}
+        ${isCustomerCrud ? `<div id="customer-mobile-cards" class="customer-mobile-cards"></div>` : `<div id="crud-mobile-cards" class="crud-mobile-cards"></div>`}
       </article>
       ${isDocumentsReadOnly ? "" : `<article class="panel crud-form-panel">
         <h3 id="form-title">${t("create")}</h3>
@@ -6215,6 +6215,8 @@ function renderTable(module, rows, progressMap = {}) {
   }
   if (module === "customers") {
     renderCustomerMobileCards(rows);
+  } else {
+    renderCrudMobileCards(module, rows);
   }
 }
 
@@ -6253,6 +6255,153 @@ function renderCustomerMobileCards(rows = []) {
       </article>
     `;
   }).join("");
+}
+
+function mobileCrudTitle(module, row) {
+  if (module === "estimates") return row.title || `#${row.id}`;
+  if (module === "contracts") return row.contract_no || row.title || `#${row.id}`;
+  if (module === "projects") return row.name || `#${row.id}`;
+  if (module === "change_orders") return row.order_no || row.title || `#${row.id}`;
+  if (module === "documents") return row.file_name || `#${row.id}`;
+  if (module === "designers" || module === "designer_applications") return row.name || `#${row.id}`;
+  return row.name || row.title || row.contract_no || `#${row.id}`;
+}
+
+function mobileCrudColumns(module) {
+  const map = {
+    estimates: ["customer_name", "confirm_status", "total_amount"],
+    contracts: ["sign_status", "total_amount", "signed_date"],
+    projects: ["status", "progress_pct", "designer_name"],
+    change_orders: ["status", "amount_delta", "project_name"],
+    documents: ["doc_type", "visibility", "tags"],
+    designers: ["phone", "status", "permission_modules"],
+    designer_applications: ["phone", "specialty", "status"],
+    designer_assignments: ["source_name", "assignment_type", "status"],
+    document_templates: ["template_type", "project_type", "is_default"],
+  };
+  return map[module] || ((CRUD_SCHEMA[module]?.table || []).filter((x) => x !== "id").slice(0, 3));
+}
+
+function mobileCrudValue(module, row, col) {
+  if (col === "total_amount" || col === "amount_delta") return fmtMoney(Number(row[col] || 0));
+  if (col === "progress_pct") return `${Number(row[col] || 0)}%`;
+  if (col === "permission_modules") return esc(designerPermissionLabels(row[col] || []));
+  if (module === "documents" && col === "tags") {
+    try {
+      const parsed = JSON.parse(row.tags || "{}");
+      const parts = [];
+      if (parsed.source_id != null) parts.push(`${t("doc_source_label")} #${parsed.source_id}`);
+      if (parsed.version != null) parts.push(`${t("doc_version_label")} ${parsed.version}`);
+      if (parsed.lang) parts.push(`${t("doc_lang_label")} ${String(parsed.lang).toUpperCase()}`);
+      return esc(parts.length ? parts.join(" / ") : "-");
+    } catch {
+      return esc(row.tags || "-");
+    }
+  }
+  return displayValue(col, row[col]);
+}
+
+function mobileCrudActions(module, row) {
+  const id = esc(row.id ?? "");
+  if (module === "estimates") {
+    const status = normalizeEnum(row.confirm_status || "draft");
+    return `
+      <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+      <button data-act="pdf" data-id="${id}">${t("pdf")}</button>
+      ${status === "draft" ? `<button data-act="mark-estimate-sent" data-id="${id}" class="secondary">${t("mark_sent")}</button>` : ""}
+      ${status === "sent" ? `<button data-act="mark-estimate-confirmed" data-id="${id}">${t("customer_confirm")}</button>` : ""}
+      ${row.linked_contract_id
+        ? `<button data-act="view-contract" data-id="${id}" data-contract-id="${esc(row.linked_contract_id)}" class="secondary">${t("view_contract")}</button>`
+        : `<button data-act="gen-contract" data-id="${id}">${t("generate_contract")}</button>`}
+    `;
+  }
+  if (module === "contracts") {
+    return `
+      <button data-act="contract-pdf" data-id="${id}">${t("pdf")}</button>
+      <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+    `;
+  }
+  if (module === "projects") {
+    return `
+      <button data-act="detail" data-id="${id}">${t("detail")}</button>
+      <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+    `;
+  }
+  if (module === "change_orders") {
+    return `
+      <button data-act="print-change-order" data-id="${id}" class="secondary">${t("print_change_order_doc")}</button>
+      <button data-act="pdf-change-order" data-id="${id}">${t("export_change_order_pdf")}</button>
+      <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+    `;
+  }
+  if (module === "documents") {
+    return `
+      <a href="${esc(row.url || "#")}" target="_blank" rel="noopener" class="btn-like">${t("view")}</a>
+      <a href="${esc(row.url || "#")}" download="${esc(row.file_name || "")}" class="btn-like secondary">${t("download")}</a>
+    `;
+  }
+  if (module === "designer_applications") {
+    return `
+      <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+      ${["pending", "contacted"].includes(normalizeEnum(row.status || "pending")) ? `<button data-act="approve-application" data-id="${id}">${t("approve_application")}</button>` : ""}
+    `;
+  }
+  if (module === "designers") {
+    return `
+      <button data-act="open-designer-permissions" data-id="${id}">${t("open_permissions")}</button>
+      <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+    `;
+  }
+  return `
+    <button data-act="edit" data-id="${id}" class="secondary">${t("edit")}</button>
+    <button data-act="del" data-id="${id}" class="danger">${t("del")}</button>
+  `;
+}
+
+function bindCrudMobileCards() {
+  const host = q("#crud-mobile-cards");
+  if (!host || host.dataset.bound === "1") return;
+  host.dataset.bound = "1";
+  host.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act || "";
+    const id = String(btn.dataset.id || "");
+    const tableBtn = Array.from(document.querySelectorAll("#table button[data-act]"))
+      .find((x) => (x.dataset.act || "") === act && String(x.dataset.id || "") === id);
+    if (tableBtn) tableBtn.click();
+  });
+}
+
+function renderCrudMobileCards(module, rows = []) {
+  const host = q("#crud-mobile-cards");
+  if (!host) return;
+  bindCrudMobileCards();
+  if (!rows.length) {
+    host.innerHTML = `<div class="crud-mobile-empty">${t("no_data") || "-"}</div>`;
+    return;
+  }
+  const cols = mobileCrudColumns(module);
+  host.innerHTML = rows.map((row) => `
+    <article class="crud-mobile-card" data-row-id="${esc(row.id ?? "")}">
+      <div class="crud-mobile-card-head">
+        <div class="crud-mobile-title">${esc(mobileCrudTitle(module, row))}</div>
+        <div class="crud-mobile-id">#${esc(row.id ?? "")}</div>
+      </div>
+      <div class="crud-mobile-fields">
+        ${cols.map((col) => `
+          <div class="crud-mobile-field">
+            <span>${esc(fieldLabel(col))}</span>
+            <b>${mobileCrudValue(module, row, col)}</b>
+          </div>
+        `).join("")}
+      </div>
+      <div class="crud-mobile-actions">
+        ${mobileCrudActions(module, row)}
+      </div>
+    </article>
+  `).join("");
+  applyActionButtonTitles(host);
 }
 
 function collectForm() {
@@ -9631,6 +9780,7 @@ async function handleBrandLogoUpload(slot) {
 }
 
 async function renderApp() {
+  document.body.dataset.module = state.module || "";
   setPageHeader();
   renderMenu();
   q("#lang-select").value = state.locale;

@@ -491,6 +491,76 @@ button:disabled {
   min-height: 40px;
   padding: 8px 10px;
 }
+.crud-mobile-cards {
+  display: none;
+}
+.crud-mobile-empty {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--sub);
+  background: #fff;
+}
+.crud-mobile-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+}
+.crud-mobile-card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.crud-mobile-title {
+  min-width: 0;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.crud-mobile-id {
+  color: var(--sub);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.crud-mobile-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.crud-mobile-field {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.crud-mobile-field span {
+  color: var(--sub);
+  font-size: 11px;
+  line-height: 1.2;
+}
+.crud-mobile-field b {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.crud-mobile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.crud-mobile-actions button,
+.crud-mobile-actions .btn-like {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+}
 .stage-template-layout .stage-template-list-panel { min-width: 0; }
 .stage-template-layout .stage-template-editor-panel {
   min-width: 0;
@@ -1599,7 +1669,58 @@ button:active:not(:disabled),
 }
 
 @media (max-width: 768px) {
-  .content { padding: 10px; min-height: 0; }
+  html,
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+  .layout {
+    width: 100%;
+    overflow-x: hidden;
+  }
+  .content {
+    width: 100%;
+    padding: 10px;
+    min-height: 0;
+    overflow-x: hidden;
+  }
+  body:not([data-module="dashboard"]) .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: 8px 10px;
+  }
+  body:not([data-module="dashboard"]) .sidebar .menu,
+  body:not([data-module="dashboard"]) .sidebar .brand-tagline {
+    display: none;
+  }
+  body:not([data-module="dashboard"]) .brand-lockup {
+    min-height: 40px;
+    margin: 0;
+  }
+  body:not([data-module="dashboard"]) .brand-icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+  body:not([data-module="dashboard"]) .sidebar h1 {
+    font-size: 18px;
+    line-height: 0.95;
+  }
+  body:not([data-module="dashboard"]) #brand-subtitle {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+  }
+  body[data-module="dashboard"] .menu {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body[data-module="dashboard"] .menu .menu-children {
+    display: none;
+  }
+  body[data-module="dashboard"] .menu button {
+    min-height: 42px;
+    font-size: 13px;
+  }
   .topbar {
     gap: 8px;
     margin-bottom: 10px;
@@ -1627,6 +1748,63 @@ button:active:not(:disabled),
     min-height: 38px;
     padding: 7px 8px;
     font-size: 13px;
+  }
+  body:not([data-module="dashboard"]) .topbar p {
+    display: none;
+  }
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+  .tabs button {
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    padding: 8px 6px;
+    font-size: 13px;
+    white-space: normal;
+  }
+  .crud-layout {
+    display: block;
+  }
+  .crud-list-panel {
+    padding: 10px;
+    overflow: hidden;
+  }
+  .crud-layout .crud-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .crud-layout .crud-toolbar #keyword {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .crud-layout .crud-toolbar select {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+  .crud-layout .table-wrap {
+    display: none;
+  }
+  .crud-mobile-cards {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .crud-mobile-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .crud-mobile-actions button,
+  .crud-mobile-actions .btn-like {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
   }
   .cards.cards-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card .v { font-size: 22px; }
