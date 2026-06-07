@@ -4511,7 +4511,13 @@ async function refreshOwnerDashboardSections(options = {}) {
 async function renderDashboard() {
   q("#main").innerHTML = `
     <section id="dashboard-home" class="dashboard-owner">
-      <div class="dashboard-layer">
+      <div class="dashboard-mobile-tabs" role="tablist" aria-label="Dashboard sections">
+        <button type="button" class="active" data-dashboard-mobile-tab="tasks">${t("dashboard_todo_priority")}</button>
+        <button type="button" data-dashboard-mobile-tab="kpis">${t("dashboard_monthly_overview")}</button>
+        <button type="button" data-dashboard-mobile-tab="recent">${t("dashboard_recent_activity")}</button>
+      </div>
+
+      <div class="dashboard-layer active" data-dashboard-mobile-panel="tasks">
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_todo_priority")}</h3>
         </div>
@@ -4524,14 +4530,14 @@ async function renderDashboard() {
         </div>
       </div>
 
-      <div class="dashboard-layer">
+      <div class="dashboard-layer" data-dashboard-mobile-panel="kpis">
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_monthly_overview")}</h3>
         </div>
         <div class="cards cards-primary dashboard-kpi-grid" id="dashboard-kpi-grid"></div>
       </div>
 
-      <div class="dashboard-layer">
+      <div class="dashboard-layer" data-dashboard-mobile-panel="recent">
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_recent_activity")}</h3>
         </div>
@@ -4544,6 +4550,15 @@ async function renderDashboard() {
       </div>
     </section>
   `;
+  q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.dashboardMobileTab;
+      q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-tab]").forEach((x) => x.classList.toggle("active", x === btn));
+      q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-panel]").forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.dashboardMobilePanel === key);
+      });
+    });
+  });
   await refreshOwnerDashboardSections({ tasks: true, kpis: true, recent: true });
 }
 

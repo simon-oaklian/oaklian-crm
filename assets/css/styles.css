@@ -322,6 +322,9 @@ button:disabled {
   display: grid;
   gap: 12px;
 }
+.dashboard-mobile-tabs {
+  display: none;
+}
 .dashboard-layer {
   display: grid;
   gap: 10px;
@@ -1590,10 +1593,90 @@ button:active:not(:disabled),
   .topbar h2 { font-size: 22px; }
   .cards.cards-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card .v { font-size: 22px; }
+  .dashboard-owner {
+    gap: 10px;
+  }
+  .dashboard-mobile-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 6px 0;
+    background: linear-gradient(140deg, #F1F5F9, #eef2f6 40%, #e9eff9);
+  }
+  .dashboard-mobile-tabs button {
+    min-height: 38px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+    border-color: var(--line);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .dashboard-mobile-tabs button.active {
+    background: var(--main);
+    border-color: var(--main);
+    color: #fff;
+  }
+  .dashboard-owner .dashboard-layer {
+    display: none;
+  }
+  .dashboard-owner .dashboard-layer.active {
+    display: grid;
+  }
+  .dashboard-layer-head {
+    display: none;
+  }
+  .dashboard-todo-grid,
+  .dashboard-recent-grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 8px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dashboard-todo-grid > .panel,
+  .dashboard-recent-grid > .panel {
+    flex: 0 0 min(88vw, 420px);
+    min-height: 0;
+    max-height: calc(100vh - 238px);
+    scroll-snap-align: start;
+  }
+  .todo-card-head {
+    align-items: flex-start;
+  }
+  .todo-card-head h4 {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+  .todo-list,
+  .recent-list {
+    max-height: calc(100vh - 340px);
+    overflow: auto;
+  }
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+  }
+  .dashboard-kpi-grid .card {
+    min-height: 76px;
+    padding: 10px;
+  }
+  .dashboard-kpi-grid .card .k {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+  .dashboard-kpi-grid .card .v {
+    font-size: 22px;
+  }
   .drawer-panel { width: 100vw; }
   .crm-modal-panel { width: 96vw; max-height: 90vh; }
   .user-meta { max-width: 100%; }
-  .dashboard-kpi-grid { grid-template-columns: 1fr; }
   .stage-custom-row { grid-template-columns: 1fr; }
   .stage-template-step-row { grid-template-columns: 1fr; }
   .data-table-contracts .action-cell { min-width: 260px; }
