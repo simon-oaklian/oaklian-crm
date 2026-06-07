@@ -4521,8 +4521,15 @@ async function renderDashboard() {
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_todo_priority")}</h3>
         </div>
+        <div class="dashboard-mobile-card-tabs" data-dashboard-card-tabs="tasks">
+          <button type="button" class="active" data-dashboard-card-target="todo-followups-card">${t("todo_followups_due")}</button>
+          <button type="button" data-dashboard-card-target="todo-estimates-card">${t("todo_estimate_confirm")}</button>
+          <button type="button" data-dashboard-card-target="todo-contracts-card">${t("todo_contract_sign")}</button>
+          <button type="button" data-dashboard-card-target="todo-payment-card">${t("todo_payment_reminder")}</button>
+          <button type="button" data-dashboard-card-target="todo-change-orders-card">${t("todo_change_order_pending")}</button>
+        </div>
         <div class="dashboard-todo-grid">
-          <article class="panel todo-card" id="todo-followups-card"></article>
+          <article class="panel todo-card mobile-card-active" id="todo-followups-card"></article>
           <article class="panel todo-card" id="todo-estimates-card"></article>
           <article class="panel todo-card" id="todo-contracts-card"></article>
           <article class="panel todo-card" id="todo-payment-card"></article>
@@ -4541,8 +4548,14 @@ async function renderDashboard() {
         <div class="dashboard-layer-head">
           <h3>${t("dashboard_recent_activity")}</h3>
         </div>
+        <div class="dashboard-mobile-card-tabs" data-dashboard-card-tabs="recent">
+          <button type="button" class="active" data-dashboard-card-target="recent-projects-card">${t("recent_project_updates")}</button>
+          <button type="button" data-dashboard-card-target="recent-uploads-card">${t("recent_uploads")}</button>
+          <button type="button" data-dashboard-card-target="recent-notifications-card">${t("recent_notifications")}</button>
+          <button type="button" data-dashboard-card-target="recent-change-orders-card">${t("recent_change_orders")}</button>
+        </div>
         <div class="dashboard-recent-grid">
-          <article class="panel recent-card" id="recent-projects-card"></article>
+          <article class="panel recent-card mobile-card-active" id="recent-projects-card"></article>
           <article class="panel recent-card" id="recent-uploads-card"></article>
           <article class="panel recent-card" id="recent-notifications-card"></article>
           <article class="panel recent-card" id="recent-change-orders-card"></article>
@@ -4556,6 +4569,18 @@ async function renderDashboard() {
       q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-tab]").forEach((x) => x.classList.toggle("active", x === btn));
       q("#dashboard-home")?.querySelectorAll("[data-dashboard-mobile-panel]").forEach((panel) => {
         panel.classList.toggle("active", panel.dataset.dashboardMobilePanel === key);
+      });
+    });
+  });
+  q("#dashboard-home")?.querySelectorAll("[data-dashboard-card-target]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.dashboardCardTarget;
+      const group = btn.closest("[data-dashboard-card-tabs]");
+      const layer = btn.closest("[data-dashboard-mobile-panel]");
+      if (!target || !group || !layer) return;
+      group.querySelectorAll("[data-dashboard-card-target]").forEach((x) => x.classList.toggle("active", x === btn));
+      layer.querySelectorAll(".todo-card, .recent-card").forEach((card) => {
+        card.classList.toggle("mobile-card-active", card.id === target);
       });
     });
   });
