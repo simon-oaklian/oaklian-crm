@@ -3904,7 +3904,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 ph = ",".join(["?"] * len(estimate_ids))
                 cur.execute(
                     f"""
-                    SELECT id,estimate_id,contract_no,project_id,customer_id,title,address,total_amount,
+                    SELECT id,estimate_id,contract_no,project_id,customer_id,title,address,total_amount,updated_at,
                            sign_status,signed_status,estimate_snapshot_updated_at,estimate_snapshot_total_amount
                     FROM contracts
                     WHERE estimate_id IN ({ph})
@@ -3937,7 +3937,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 if not linked and r.get("contract_id"):
                     cur.execute(
                         """
-                        SELECT id,contract_no,customer_id,total_amount,title,address,sign_status,signed_status,
+                        SELECT id,contract_no,customer_id,total_amount,title,address,updated_at,sign_status,signed_status,
                                estimate_snapshot_updated_at,estimate_snapshot_total_amount
                         FROM contracts WHERE id=?
                         """,
@@ -3960,13 +3960,21 @@ class CRMHandler(BaseHTTPRequestHandler):
                     sign_key = self._contract_sign_status_key(linked.get("sign_status") or linked.get("signed_status"))
                     snapshot_time = linked.get("estimate_snapshot_updated_at")
                     snapshot_amount = linked.get("estimate_snapshot_total_amount")
+                    estimate_total = r.get("total_amount")
+                    contract_total = linked.get("total_amount")
                     amount_changed = False
-                    if snapshot_amount not in (None, ""):
-                        try:
-                            amount_changed = abs(float(snapshot_amount or 0) - float(r.get("total_amount") or 0)) >= 0.01
-                        except (TypeError, ValueError):
-                            amount_changed = True
-                    changed = bool(snapshot_time and r.get("updated_at") and str(snapshot_time) != str(r.get("updated_at"))) or amount_changed
+                    try:
+                        compare_amount = snapshot_amount if snapshot_amount not in (None, "") else contract_total
+                        amount_changed = abs(float(compare_amount or 0) - float(estimate_total or 0)) >= 0.01
+                    except (TypeError, ValueError):
+                        amount_changed = True
+                    estimate_updated = r.get("updated_at")
+                    contract_updated = linked.get("updated_at")
+                    if snapshot_time not in (None, ""):
+                        time_changed = bool(estimate_updated and str(snapshot_time) != str(estimate_updated))
+                    else:
+                        time_changed = bool(estimate_updated and contract_updated and str(contract_updated) < str(estimate_updated))
+                    changed = time_changed or amount_changed
                     r["linked_contract_sync_required"] = bool(changed and sign_key != "signed")
                     r["linked_contract_sync_locked"] = bool(changed and sign_key == "signed")
                 if linked and not r.get("contract_id"):
