@@ -1218,6 +1218,14 @@ def _estimate_document_title(est):
     parts = ["Estimate", _doc_title_part(customer), _doc_title_part(subject), number, _doc_title_part(date)]
     return " - ".join([p for p in parts if p])
 
+
+def estimate_document_filename(get_conn, estimate_id):
+    est = _load_estimate_full(get_conn, estimate_id)
+    if not est:
+        return None
+    stem = _doc_title_part(_estimate_document_title(est).replace(" - ", "_"), f"Estimate-EST-{int(estimate_id):05d}")
+    return f"{stem}.html"
+
 def generate_estimate_pdf_html(get_conn, estimate_id, lang="zh", auto_print=True, mode="pdf"):
     """
     生成报价 PDF/打印 HTML。

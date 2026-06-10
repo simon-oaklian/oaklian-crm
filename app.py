@@ -2507,8 +2507,8 @@ class CRMHandler(BaseHTTPRequestHandler):
         self._set_headers(status=status, extra_headers=extra_headers)
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
-    def _html_response(self, html, status=200):
-        self._set_headers(status=status, content_type="text/html; charset=utf-8")
+    def _html_response(self, html, status=200, extra_headers=None):
+        self._set_headers(status=status, content_type="text/html; charset=utf-8", extra_headers=extra_headers)
         self.wfile.write(html.encode("utf-8"))
 
     def _read_json_body(self):
@@ -7549,6 +7549,25 @@ class CRMHandler(BaseHTTPRequestHandler):
         stem = self._document_name_part(stem, f"{int(source_id)}")
         return f"{stem}_v{int(version)}_{timestamp}.html"
 
+    def _html_filename_headers(self, filename):
+        import re as _re
+        from urllib.parse import quote as _quote
+        display_name = str(filename or "document.html").strip() or "document.html"
+        if not display_name.lower().endswith(".html"):
+            display_name = f"{display_name}.html"
+        ascii_name = _re.sub(r"[^A-Za-z0-9._-]+", "-", display_name).strip(".-_") or "document.html"
+        if not ascii_name.lower().endswith(".html"):
+            ascii_name = f"{ascii_name}.html"
+        return {
+            "Content-Disposition": f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{_quote(display_name)}",
+            "X-Document-Filename": ascii_name,
+        }
+
+    def _document_response_headers(self, doc_type, source_id, info=None):
+        stem = self._document_print_title(doc_type, source_id, info).replace(" - ", "_")
+        stem = self._document_name_part(stem, f"{doc_type or 'document'}-{source_id}")
+        return self._html_filename_headers(f"{stem}.html")
+
     def _archive_document(self, doc_type, source_id, lang="en"):
         """归档 contract / change_order 当前快照到 documents/。失败仅 log,不抛错。  # F_ARCHIVE_PATCH_APPLIED"""
         try:
@@ -7558,7 +7577,7 @@ class CRMHandler(BaseHTTPRequestHandler):
             captured = []
             original_html_response = self._html_response
 
-            def _capture(html, status=200):
+            def _capture(html, status=200, extra_headers=None):
                 captured.append(html)
                 return None
 
@@ -10668,8 +10687,9 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
         rows_html = "".join(row_parts) if row_parts else f"<tr><td colspan='5'>{txt['no_line_items']}</td></tr>"
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
+        document_info = {'customer_name': estimate.get('customer_name'), 'project_name': estimate.get('project_name'), 'title': estimate.get('title'), 'estimate_no': estimate_no, 'date': created_date}
         html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>{html_escape(self._document_print_title('estimate', estimate_id, {'customer_name': estimate.get('customer_name'), 'project_name': estimate.get('project_name'), 'title': estimate.get('title'), 'estimate_no': estimate_no, 'date': created_date}))}</title>
+<html><head><meta charset="utf-8"><title>{html_escape(self._document_print_title('estimate', estimate_id, document_info))}</title>
 <style>
 @page{{size:A4;margin:14mm}}
 body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
@@ -10738,7 +10758,7 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
 </div>
 {print_script}
 </body></html>"""
-        return self._html_response(html)
+        return self._html_response(html, extra_headers=self._document_response_headers('estimate', estimate_id, document_info))
 
     def _contract_pdf_html(self, contract_id, lang, auto_print=True, mode="pdf"):
         conn = get_conn()
@@ -11035,8 +11055,9 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         note_html = f"<div class='notes'><b>{txt['notes']}:</b><br>{html_escape(note_text)}</div>" if note_text else ""
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
+        document_info = {'customer_name': contract.get('customer_name'), 'project_name': contract.get('project_name'), 'title': contract.get('title'), 'contract_no': contract.get('contract_no'), 'date': created_date}
         html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>{html_escape(self._document_print_title('contract', contract_id, {'customer_name': contract.get('customer_name'), 'project_name': contract.get('project_name'), 'title': contract.get('title'), 'contract_no': contract.get('contract_no'), 'date': created_date}))}</title>
+<html><head><meta charset="utf-8"><title>{html_escape(self._document_print_title('contract', contract_id, document_info))}</title>
 <style>
 @page{{size:A4;margin:14mm}}
 body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
@@ -11151,7 +11172,7 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
 </div>
 {print_script}
 </body></html>"""
-        return self._html_response(html)
+        return self._html_response(html, extra_headers=self._document_response_headers('contract', contract_id, document_info))
 
     def _change_order_pdf_html(self, change_order_id, lang, auto_print=True, mode="pdf"):
         conn = get_conn()

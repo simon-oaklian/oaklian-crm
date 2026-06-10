@@ -2046,11 +2046,20 @@ def _handle_pdf_export(handler, get_conn, estimate_id, qs):
         return True
 
     # 直接发 HTML
+    filename = None
+    try:
+        filename = ev2pdf.estimate_document_filename(get_conn, estimate_id)
+    except Exception:
+        filename = None
+
     payload = html_doc.encode("utf-8")
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(payload)))
     handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+    if filename and hasattr(handler, "_html_filename_headers"):
+        for key, value in handler._html_filename_headers(filename).items():
+            handler.send_header(key, value)
     handler.end_headers()
     handler.wfile.write(payload)
     return True
