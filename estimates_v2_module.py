@@ -1271,7 +1271,8 @@ def _handle_estimate_full(handler, get_conn, eid):
     est["payment_milestones"] = _rows_to_dicts(cur.fetchall())
     cur.execute(
         """
-        SELECT id,contract_no,customer_id,total_amount,title,address,project_id,sign_status,signed_status
+        SELECT id,contract_no,customer_id,total_amount,title,address,project_id,sign_status,signed_status,
+               estimate_snapshot_updated_at,estimate_snapshot_total_amount
         FROM contracts
         WHERE estimate_id=?
         ORDER BY id ASC
@@ -1283,7 +1284,8 @@ def _handle_estimate_full(handler, get_conn, eid):
     if not linked and est.get("contract_id"):
         cur.execute(
             """
-            SELECT id,contract_no,customer_id,total_amount,title,address,project_id,sign_status,signed_status
+            SELECT id,contract_no,customer_id,total_amount,title,address,project_id,sign_status,signed_status,
+                   estimate_snapshot_updated_at,estimate_snapshot_total_amount
             FROM contracts
             WHERE id=?
             """,
@@ -1299,6 +1301,21 @@ def _handle_estimate_full(handler, get_conn, eid):
     est["linked_contract_customer_id"] = linked.get("customer_id") if linked else None
     est["linked_contract_total_amount"] = linked.get("total_amount") if linked else None
     est["linked_contract_sign_status"] = (linked.get("sign_status") or linked.get("signed_status")) if linked else None
+    est["linked_contract_sync_required"] = False
+    est["linked_contract_sync_locked"] = False
+    if linked:
+        sign_key = str(linked.get("sign_status") or linked.get("signed_status") or "").lower()
+        snapshot_time = linked.get("estimate_snapshot_updated_at")
+        snapshot_amount = linked.get("estimate_snapshot_total_amount")
+        amount_changed = False
+        if snapshot_amount not in (None, ""):
+            try:
+                amount_changed = abs(float(snapshot_amount or 0) - float(est.get("total_amount") or 0)) >= 0.01
+            except (TypeError, ValueError):
+                amount_changed = True
+        changed = bool(snapshot_time and est.get("updated_at") and str(snapshot_time) != str(est.get("updated_at"))) or amount_changed
+        est["linked_contract_sync_required"] = bool(changed and sign_key not in {"signed", "???"})
+        est["linked_contract_sync_locked"] = bool(changed and sign_key in {"signed", "???"})
     est["linked_contract_mismatch"] = False
     conn.close()
     handler._json_response(est)

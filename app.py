@@ -1281,6 +1281,8 @@ def init_db():
             "signed_at": "TEXT",
             "signed_by": "INTEGER",
             "sign_note": "TEXT",
+            "estimate_snapshot_updated_at": "TEXT",
+            "estimate_snapshot_total_amount": "REAL",
         },
     )
     ensure_columns(cur, "projects", {"stage_template_id": "INTEGER", "project_type": "TEXT"})
@@ -3902,7 +3904,8 @@ class CRMHandler(BaseHTTPRequestHandler):
                 ph = ",".join(["?"] * len(estimate_ids))
                 cur.execute(
                     f"""
-                    SELECT id,estimate_id,contract_no,project_id,customer_id,title,address,total_amount
+                    SELECT id,estimate_id,contract_no,project_id,customer_id,title,address,total_amount,
+                           sign_status,signed_status,estimate_snapshot_updated_at,estimate_snapshot_total_amount
                     FROM contracts
                     WHERE estimate_id IN ({ph})
                     ORDER BY id ASC
@@ -3932,7 +3935,14 @@ class CRMHandler(BaseHTTPRequestHandler):
                     if int(linked.get("customer_id")) != int(r.get("customer_id")):
                         linked = None
                 if not linked and r.get("contract_id"):
-                    cur.execute("SELECT id,contract_no,customer_id,total_amount,title,address FROM contracts WHERE id=?", (r.get("contract_id"),))
+                    cur.execute(
+                        """
+                        SELECT id,contract_no,customer_id,total_amount,title,address,sign_status,signed_status,
+                               estimate_snapshot_updated_at,estimate_snapshot_total_amount
+                        FROM contracts WHERE id=?
+                        """,
+                        (r.get("contract_id"),),
+                    )
                     c = cur.fetchone()
                     linked = row_to_dict(c) if c else None
                     if linked and linked.get("customer_id") not in (None, "") and r.get("customer_id") not in (None, ""):
@@ -3944,6 +3954,21 @@ class CRMHandler(BaseHTTPRequestHandler):
                 r["linked_contract_total_amount"] = linked["total_amount"] if linked else None
                 r["linked_contract_title"] = linked["title"] if linked else None
                 r["linked_contract_address"] = linked["address"] if linked else None
+                r["linked_contract_sync_required"] = False
+                r["linked_contract_sync_locked"] = False
+                if linked:
+                    sign_key = self._contract_sign_status_key(linked.get("sign_status") or linked.get("signed_status"))
+                    snapshot_time = linked.get("estimate_snapshot_updated_at")
+                    snapshot_amount = linked.get("estimate_snapshot_total_amount")
+                    amount_changed = False
+                    if snapshot_amount not in (None, ""):
+                        try:
+                            amount_changed = abs(float(snapshot_amount or 0) - float(r.get("total_amount") or 0)) >= 0.01
+                        except (TypeError, ValueError):
+                            amount_changed = True
+                    changed = bool(snapshot_time and r.get("updated_at") and str(snapshot_time) != str(r.get("updated_at"))) or amount_changed
+                    r["linked_contract_sync_required"] = bool(changed and sign_key != "signed")
+                    r["linked_contract_sync_locked"] = bool(changed and sign_key == "signed")
                 if linked and not r.get("contract_id"):
                     r["contract_id"] = linked["id"]
                 customer = customer_map.get(r.get("customer_id"))
@@ -4207,7 +4232,7 @@ class CRMHandler(BaseHTTPRequestHandler):
             estimate_map = {}
             if estimate_ids:
                 ph = ",".join(["?"] * len(estimate_ids))
-                cur.execute(f"SELECT id,title,total_amount FROM estimates WHERE id IN ({ph})", tuple(estimate_ids))
+                cur.execute(f"SELECT id,title,total_amount,updated_at FROM estimates WHERE id IN ({ph})", tuple(estimate_ids))
                 estimate_map = {e["id"]: row_to_dict(e) for e in cur.fetchall()}
             for r in rows:
                 sign_status = self._contract_sign_status_key(r.get("sign_status") or r.get("signed_status"))
@@ -4224,6 +4249,19 @@ class CRMHandler(BaseHTTPRequestHandler):
                 est = estimate_map.get(r.get("estimate_id"))
                 r["source_estimate_title"] = est["title"] if est else None
                 r["source_estimate_total_amount"] = est["total_amount"] if est else None
+                r["source_estimate_updated_at"] = est["updated_at"] if est else None
+                snapshot_time = r.get("estimate_snapshot_updated_at")
+                snapshot_amount = r.get("estimate_snapshot_total_amount")
+                amount_changed = False
+                if est and snapshot_amount not in (None, ""):
+                    try:
+                        amount_changed = abs(float(snapshot_amount or 0) - float(est.get("total_amount") or 0)) >= 0.01
+                    except (TypeError, ValueError):
+                        amount_changed = True
+                changed = bool(est and snapshot_time and est.get("updated_at") and str(snapshot_time) != str(est.get("updated_at"))) or amount_changed
+                r["estimate_sync_locked"] = bool(changed and sign_status == "signed")
+                r["estimate_sync_required"] = bool(changed and sign_status != "signed")
+                r["estimate_sync_status"] = "locked" if r["estimate_sync_locked"] else ("required" if r["estimate_sync_required"] else "current")
                 summary = self._change_order_summary(cur, project_id=linked_project_id, contract_id=r.get("id"))
                 base_contract_amount = float(r.get("total_amount") or 0)
                 approved_change_amount = float(summary.get("approved_change_amount") or 0)
@@ -4479,7 +4517,7 @@ class CRMHandler(BaseHTTPRequestHandler):
         if existed:
             ts_existing = now_ts()
             if not estimate["contract_id"]:
-                cur.execute("UPDATE estimates SET contract_id=?, updated_at=? WHERE id=?", (existed["id"], ts_existing, estimate_id))
+                cur.execute("UPDATE estimates SET contract_id=? WHERE id=?", (existed["id"], estimate_id))
             conn.commit()
             row = row_to_dict(existed)
             self._enrich_resource_rows(cur, "contracts", [row])
@@ -4504,8 +4542,9 @@ class CRMHandler(BaseHTTPRequestHandler):
             """
             INSERT INTO contracts(
                 customer_id,project_id,estimate_id,title,address,contract_no,total_amount,payment_plan_json,
-                signed_status,signed_date,sign_status,signed_at,signed_by,sign_note,attachment_url,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                signed_status,signed_date,sign_status,signed_at,signed_by,sign_note,attachment_url,
+                estimate_snapshot_updated_at,estimate_snapshot_total_amount,created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 estimate["customer_id"],
@@ -4523,13 +4562,15 @@ class CRMHandler(BaseHTTPRequestHandler):
                 None,
                 "",
                 "",
+                estimate["updated_at"],
+                total_amount or 0,
                 ts,
                 ts,
             ),
         )
         contract_id = cur.lastrowid
         self._copy_estimate_payment_milestones_to_contract(cur, estimate_id, contract_id)
-        cur.execute("UPDATE estimates SET contract_id=?, updated_at=? WHERE id=?", (contract_id, ts, estimate_id))
+        cur.execute("UPDATE estimates SET contract_id=? WHERE id=?", (contract_id, estimate_id))
         if project_id:
             cur.execute(
                 "UPDATE projects SET contract_id=COALESCE(contract_id,?), estimate_id=COALESCE(estimate_id,?), updated_at=? WHERE id=?",
@@ -4544,10 +4585,13 @@ class CRMHandler(BaseHTTPRequestHandler):
         conn.close()
         return self._json_response({"created": True, "contract": row}, 201)
 
-    def _copy_estimate_payment_milestones_to_contract(self, cur, estimate_id, contract_id):
-        cur.execute("SELECT COUNT(1) c FROM contract_payment_milestones WHERE contract_id=?", (contract_id,))
-        if (cur.fetchone() or {"c": 0})["c"]:
-            return
+    def _copy_estimate_payment_milestones_to_contract(self, cur, estimate_id, contract_id, replace=False):
+        if replace:
+            cur.execute("DELETE FROM contract_payment_milestones WHERE contract_id=?", (contract_id,))
+        else:
+            cur.execute("SELECT COUNT(1) c FROM contract_payment_milestones WHERE contract_id=?", (contract_id,))
+            if (cur.fetchone() or {"c": 0})["c"]:
+                return
         cur.execute(
             """
             SELECT epm.*, psti.step_name AS stage_step_name
@@ -4604,6 +4648,97 @@ class CRMHandler(BaseHTTPRequestHandler):
                     ts,
                 ),
             )
+
+
+    def _contract_sync_estimate(self, path, user):
+        if user.get("role") == "designer":
+            return self._json_response({"error": "Forbidden"}, 403)
+        if not self._has_module(user, "contracts"):
+            return self._json_response({"error": "Forbidden: contracts"}, 403)
+        parts = [p for p in path.split("/") if p]
+        if len(parts) != 4 or parts[0] != "api" or parts[1] != "contracts" or parts[3] != "sync-estimate":
+            return self._json_response({"error": "Not found"}, 404)
+        try:
+            contract_id = int(parts[2])
+        except ValueError:
+            return self._json_response({"error": "Invalid contract id"}, 400)
+
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM contracts WHERE id=?", (contract_id,))
+        contract = cur.fetchone()
+        if not contract:
+            conn.close()
+            return self._json_response({"error": "Contract not found"}, 404)
+        sign_status = self._contract_sign_status_key(contract["sign_status"] or contract["signed_status"])
+        if sign_status == "signed":
+            conn.close()
+            return self._json_response({"error": "Signed contracts cannot be overwritten. Create a change order or new contract version instead."}, 409)
+        estimate_id = contract["estimate_id"]
+        if not estimate_id:
+            conn.close()
+            return self._json_response({"error": "Contract is not linked to an estimate"}, 400)
+        cur.execute(
+            """
+            SELECT e.*, c.primary_address AS customer_address
+            FROM estimates e
+            LEFT JOIN customers c ON c.id=e.customer_id
+            WHERE e.id=?
+            """,
+            (estimate_id,),
+        )
+        estimate = cur.fetchone()
+        if not estimate:
+            conn.close()
+            return self._json_response({"error": "Linked estimate not found"}, 404)
+
+        project_id = estimate["project_id"] or contract["project_id"]
+        address = ""
+        if project_id:
+            cur.execute("SELECT address FROM projects WHERE id=?", (project_id,))
+            pr = cur.fetchone()
+            address = (pr["address"] if pr else "") or ""
+        if not address:
+            address = (estimate["address"] or "").strip()
+        if not address:
+            address = estimate["customer_address"] or contract["address"] or ""
+        title = (estimate["title"] or "").strip() or contract["title"] or f"Estimate #{estimate_id}"
+        total_amount = estimate["total_amount"] if estimate["total_amount"] not in (None, "") else (estimate["subtotal"] or 0)
+        ts = now_ts()
+        cur.execute(
+            """
+            UPDATE contracts
+            SET customer_id=?, project_id=?, title=?, address=?, total_amount=?,
+                estimate_snapshot_updated_at=?, estimate_snapshot_total_amount=?, updated_at=?
+            WHERE id=?
+            """,
+            (
+                estimate["customer_id"],
+                project_id,
+                title,
+                address,
+                total_amount or 0,
+                estimate["updated_at"],
+                total_amount or 0,
+                ts,
+                contract_id,
+            ),
+        )
+        self._copy_estimate_payment_milestones_to_contract(cur, estimate_id, contract_id, replace=True)
+        cur.execute("UPDATE estimates SET contract_id=? WHERE id=?", (contract_id, estimate_id))
+        if project_id:
+            cur.execute(
+                "UPDATE projects SET contract_id=COALESCE(contract_id,?), estimate_id=COALESCE(estimate_id,?), updated_at=? WHERE id=?",
+                (contract_id, estimate_id, ts, project_id),
+            )
+            self._recalc_designer_commission_for_project(cur, project_id)
+        self._evaluate_contract_payment_milestones(cur, contract_id=contract_id, project_id=project_id)
+        conn.commit()
+        cur.execute("SELECT * FROM contracts WHERE id=?", (contract_id,))
+        row = row_to_dict(cur.fetchone())
+        self._enrich_resource_rows(cur, "contracts", [row])
+        conn.close()
+        return self._json_response({"synced": True, "contract": row})
 
     def _contract_generate_project(self, path, user):
         if user.get("role") == "designer":
@@ -5007,6 +5142,11 @@ class CRMHandler(BaseHTTPRequestHandler):
             if not user:
                 return
             return self._estimate_generate_contract(path, user)
+        if path.startswith("/api/contracts/") and path.endswith("/sync-estimate"):
+            user = self._require_auth()
+            if not user:
+                return
+            return self._contract_sync_estimate(path, user)
         if path.startswith("/api/contracts/") and path.endswith("/generate-project"):
             user = self._require_auth()
             if not user:

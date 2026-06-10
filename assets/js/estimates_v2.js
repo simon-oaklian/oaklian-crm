@@ -103,7 +103,12 @@
       buttons.push(`<button class="ev2-btn ev2-btn-primary" id="ev2-generate-contract" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同草稿")}</button>`);
     }
     if (est.linked_contract_id) {
-      buttons.push(`<button class="ev2-btn ${linkedMismatch ? "ev2-btn-warn" : ""}" id="ev2-view-contract">${linkedMismatch ? tt("ev2_btn_contract_mismatch", "关联异常") : tt("ev2_btn_view_contract", "查看合同")}</button>`);
+      const needsSync = Number(est.linked_contract_sync_required || est.linked_contract_mismatch || 0) === 1;
+      const syncLocked = Number(est.linked_contract_sync_locked || 0) === 1;
+      if (needsSync && !syncLocked) {
+        buttons.push(`<button class="ev2-btn ev2-btn-warn" id="ev2-sync-contract">${tt("ev2_btn_sync_contract", "同步合同")}</button>`);
+      }
+      buttons.push(`<button class="ev2-btn ${needsSync && syncLocked ? "ev2-btn-warn" : ""}" id="ev2-view-contract">${needsSync && syncLocked ? tt("ev2_btn_signed_contract_stale", "已签合同") : tt("ev2_btn_view_contract", "查看合同")}</button>`);
     }
     if (noCustomer && status === "confirmed" && !est.linked_contract_id) {
       buttons.push(`<span class="ev2-mini">${tt("ev2_need_customer_for_contract", "需要先关联客户才能生成合同")}</span>`);
@@ -354,7 +359,8 @@
     $("#ev2-quote-empty").style.display = "none";
     tbody.innerHTML = list.map(r => {
       const status = String(r.confirm_status || "draft").toLowerCase();
-      const linkedMismatch = Number(r.linked_contract_mismatch || 0) === 1;
+      const linkedMismatch = Number(r.linked_contract_sync_required || r.linked_contract_mismatch || 0) === 1;
+      const syncLocked = Number(r.linked_contract_sync_locked || 0) === 1;
       const noCustomer = !Number(r.customer_id || 0);
       const flowButtons = [
         status === "draft" || status === "sent" ? `<button class="ev2-btn-mini" data-act="send-customer" data-id="${r.id}">${status === "sent" ? tt("ev2_btn_quote_link", "客户链接") : tt("ev2_btn_send_to_customer", "发送给客户")}</button>` : "",
@@ -362,8 +368,11 @@
         status === "confirmed" && !r.linked_contract_id
           ? `<button class="ev2-btn-mini ev2-btn-primary" data-act="gen-contract" data-id="${r.id}" ${noCustomer ? "disabled" : ""}>${tt("ev2_btn_generate_contract", "生成合同草稿")}</button>`
           : "",
+        r.linked_contract_id && linkedMismatch && !syncLocked
+          ? `<button class="ev2-btn-mini ev2-btn-warn" data-act="sync-contract" data-id="${r.id}" data-contract-id="${r.linked_contract_id}">${tt("ev2_btn_sync_contract", "同步合同")}</button>`
+          : "",
         r.linked_contract_id
-          ? `<button class="ev2-btn-mini ${linkedMismatch ? "ev2-btn-warn" : ""}" data-act="view-contract" data-id="${r.id}" data-contract-id="${r.linked_contract_id}">${linkedMismatch ? tt("ev2_btn_contract_mismatch", "关联异常") : tt("ev2_btn_view_contract", "查看合同")}</button>`
+          ? `<button class="ev2-btn-mini ${linkedMismatch && syncLocked ? "ev2-btn-warn" : ""}" data-act="view-contract" data-id="${r.id}" data-contract-id="${r.linked_contract_id}">${linkedMismatch && syncLocked ? tt("ev2_btn_signed_contract_stale", "已签合同") : tt("ev2_btn_view_contract", "查看合同")}</button>`
           : "",
       ].filter(Boolean).join("");
       return `
@@ -395,6 +404,7 @@
         else if (btn.dataset.act === "send-customer") sendEstimateToCustomer(id);
         else if (btn.dataset.act === "mark-confirmed") markEstimateStatus(id, "confirmed");
         else if (btn.dataset.act === "gen-contract") generateContractFromEstimate(id);
+        else if (btn.dataset.act === "sync-contract") syncLinkedContract(btn.dataset.contractId, id);
         else if (btn.dataset.act === "view-contract") openLinkedContract(btn.dataset.contractId);
       });
     });
@@ -452,6 +462,22 @@
     }
   }
 
+  async function syncLinkedContract(contractId, estimateId) {
+    if (!contractId) return;
+    if (!confirm(tt("ev2_confirm_sync_contract", "把合同草稿同步为当前报价内容？已签合同不会被覆盖。"))) return;
+    try {
+      await api(`/api/contracts/${contractId}/sync-estimate`, { method: "POST" });
+      toast(tt("ev2_contract_synced", "合同已同步为当前报价"), "success");
+      if (ev2.currentEstimate && Number(ev2.currentEstimate.id) === Number(estimateId)) {
+        await openEstimateEditor(estimateId);
+      } else {
+        await renderQuotesTab($("#ev2-tab-content"));
+      }
+    } catch (e) {
+      toast(tt("ev2_contract_sync_failed", "合同同步失败: ") + e.message, "error");
+    }
+  }
+
   async function openLinkedContract(contractId) {
     const id = Number(contractId || 0);
     if (!id) return;
@@ -472,6 +498,7 @@
     });
     $("#ev2-mark-confirmed")?.addEventListener("click", () => markEstimateStatusFromEditor("confirmed"));
     $("#ev2-generate-contract")?.addEventListener("click", () => generateContractFromEstimate(est.id));
+    $("#ev2-sync-contract")?.addEventListener("click", () => syncLinkedContract(est.linked_contract_id, est.id));
     $("#ev2-view-contract")?.addEventListener("click", () => openLinkedContract(est.linked_contract_id));
   }
 
