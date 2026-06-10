@@ -1196,6 +1196,28 @@ def _render_footer(est, lang):
 # 主函数:生成完整 HTML(含自动打印脚本)
 # ====================================================================
 
+
+
+def _doc_title_part(value, fallback=""):
+    import re
+    text = str(value or "").strip()
+    if not text:
+        return fallback
+    text = re.sub(r"[\\/:*?\"<>|]+", " ", text)
+    text = re.sub(r"\s+", "-", text)
+    text = re.sub(r"-+", "-", text).strip(" .-_")
+    return text[:64] or fallback
+
+
+def _estimate_document_title(est):
+    customer = (est.get("customer") or {}).get("name") or ""
+    subject = est.get("title") or ""
+    est_id = int(est.get("id") or 0)
+    number = f"EST-{est_id:05d}" if est_id else "EST"
+    date = str(est.get("created_at") or "")[:10]
+    parts = ["Estimate", _doc_title_part(customer), _doc_title_part(subject), number, _doc_title_part(date)]
+    return " - ".join([p for p in parts if p])
+
 def generate_estimate_pdf_html(get_conn, estimate_id, lang="zh", auto_print=True, mode="pdf"):
     """
     生成报价 PDF/打印 HTML。
@@ -1271,7 +1293,7 @@ def generate_estimate_pdf_html(get_conn, estimate_id, lang="zh", auto_print=True
       </div>
     """
 
-    title = _L(lang, "title") + f" #{est['id']:05d}"
+    title = _estimate_document_title(est)
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="{('zh-CN' if lang in ('zh','both') else 'en')}">

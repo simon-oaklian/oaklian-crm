@@ -7521,6 +7521,34 @@ class CRMHandler(BaseHTTPRequestHandler):
                 pass
         return self._json_response(item)
 
+
+    def _document_name_part(self, value, fallback=""):
+        import re as _re
+        text = str(value or "").strip()
+        if not text:
+            return fallback
+        text = _re.sub(r"[\\/:*?\"<>|]+", " ", text)
+        text = _re.sub(r"\s+", "-", text)
+        text = _re.sub(r"-+", "-", text).strip(" .-_")
+        if not text:
+            return fallback
+        return text[:64]
+
+    def _document_print_title(self, doc_type, source_id, info=None):
+        info = info or {}
+        prefix = "Contract" if doc_type == "contract" else "Estimate" if doc_type == "estimate" else str(doc_type or "Document").title()
+        customer = self._document_name_part(info.get("customer_name") or info.get("customer"), "")
+        subject = self._document_name_part(info.get("project_name") or info.get("title"), "")
+        number = self._document_name_part(info.get("document_no") or info.get("contract_no") or info.get("estimate_no"), f"ID-{source_id}")
+        date = self._document_name_part(str(info.get("date") or "")[:10], "")
+        parts = [prefix, customer, subject, number, date]
+        return " - ".join([p for p in parts if p])
+
+    def _document_archive_filename(self, doc_type, source_id, version, timestamp, info=None):
+        stem = self._document_print_title(doc_type, source_id, info).replace(" - ", "_")
+        stem = self._document_name_part(stem, f"{int(source_id)}")
+        return f"{stem}_v{int(version)}_{timestamp}.html"
+
     def _archive_document(self, doc_type, source_id, lang="en"):
         """归档 contract / change_order 当前快照到 documents/。失败仅 log,不抛错。  # F_ARCHIVE_PATCH_APPLIED"""
         try:
@@ -7575,7 +7603,29 @@ class CRMHandler(BaseHTTPRequestHandler):
             next_version = (max(existing_versions) + 1) if existing_versions else 1
 
             ts_compact = _dt.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"{int(source_id)}_v{next_version}_{ts_compact}.html"
+            archive_info = {}
+            if doc_type == "contract":
+                try:
+                    cur.execute(
+                        """
+                        SELECT ct.contract_no, ct.title, ct.created_at,
+                               c.name AS customer_name,
+                               p.name AS project_name
+                        FROM contracts ct
+                        LEFT JOIN customers c ON c.id = ct.customer_id
+                        LEFT JOIN projects p ON p.id = ct.project_id
+                        WHERE ct.id=?
+                        """,
+                        (int(source_id),),
+                    )
+                    info_row = cur.fetchone()
+                    if info_row:
+                        archive_info = row_to_dict(info_row)
+                        archive_info["document_no"] = archive_info.get("contract_no")
+                        archive_info["date"] = archive_info.get("created_at")
+                except Exception:
+                    archive_info = {}
+            file_name = self._document_archive_filename(doc_type, source_id, next_version, ts_compact, archive_info) if doc_type == "contract" else f"{int(source_id)}_v{next_version}_{ts_compact}.html"
             file_path = _os.path.join(base_dir, file_name)
             try:
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -10372,7 +10422,7 @@ class CRMHandler(BaseHTTPRequestHandler):
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>{labels['title']} #{estimate['id']}</title>
+<title>{esc(self._document_print_title('estimate', estimate.get('id'), {'customer_name': estimate.get('customer_name'), 'title': estimate.get('title'), 'estimate_no': f"EST-{int(estimate.get('id') or 0):05d}", 'date': estimate.get('created_at')}))}</title>
 <style>
 body{{margin:0;background:#e8ebf0;color:#1d2433;font-family:Arial,'Microsoft YaHei',sans-serif}}
 .page{{width:min(900px,calc(100vw - 28px));margin:24px auto;background:#fff;padding:36px;box-shadow:0 2px 12px rgba(0,0,0,.18)}}
@@ -10619,7 +10669,7 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
         html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>{html_escape(doc_title)} {estimate_no}</title>
+<html><head><meta charset="utf-8"><title>{html_escape(self._document_print_title('estimate', estimate_id, {'customer_name': estimate.get('customer_name'), 'project_name': estimate.get('project_name'), 'title': estimate.get('title'), 'estimate_no': estimate_no, 'date': created_date}))}</title>
 <style>
 @page{{size:A4;margin:14mm}}
 body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
@@ -10986,7 +11036,7 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         print_script = "<script>window.onload=function(){window.print();}</script>" if auto_print else ""
 
         html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>{html_escape(doc_title)} #{contract_id}</title>
+<html><head><meta charset="utf-8"><title>{html_escape(self._document_print_title('contract', contract_id, {'customer_name': contract.get('customer_name'), 'project_name': contract.get('project_name'), 'title': contract.get('title'), 'contract_no': contract.get('contract_no'), 'date': created_date}))}</title>
 <style>
 @page{{size:A4;margin:14mm}}
 body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
