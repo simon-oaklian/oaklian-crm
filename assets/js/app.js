@@ -3743,6 +3743,7 @@ async function openContractDetail(contractId) {
     defaultCategory: "contract",
   });
   await renderContractChangeOrderPanel(row);
+  openCrudFormPanel("contracts");
 }
 
 async function openCustomerDetail(customerId) {
@@ -3782,6 +3783,7 @@ async function openEstimateDetail(estimateId) {
     title: t("estimate_attachments"),
     defaultCategory: "estimate",
   });
+  openCrudFormPanel("estimates");
 }
 
 async function openProjectDetail(projectId) {
@@ -3800,6 +3802,7 @@ async function openChangeOrderDetail(changeOrderId) {
   await renderApp();
   const row = await api(`/api/change-orders/${coid}`);
   renderForm("change_orders", row);
+  openCrudFormPanel("change_orders");
 }
 
 async function addCustomerFollowup(customerId, payload) {
@@ -5017,7 +5020,7 @@ function crudScaffold(module) {
   const isDocumentsReadOnly = module === "documents";
   const isCustomerCrud = module === "customers";
   q("#main").innerHTML = `
-    <section class="grid-main crud-layout${isDocumentsReadOnly ? " crud-layout-readonly" : ""}${isCustomerCrud ? " customer-modal-crud" : ""}" id="crud-layout">
+    <section class="grid-main crud-layout${isDocumentsReadOnly ? " crud-layout-readonly" : " crud-form-modal"}${isCustomerCrud ? " customer-modal-crud" : ""}" id="crud-layout">
       <article class="panel crud-list-panel">
         <div class="row gap crud-toolbar">
           <input id="keyword" placeholder="keyword" />
@@ -5060,13 +5063,27 @@ function crudScaffold(module) {
   // J_PATCH_APPLIED: end of conditional form panel wrapper
 }
 
+function openCrudFormPanel(module = state.module) {
+  const layout = q("#crud-layout");
+  if (!layout) return;
+  layout.classList.add("crud-form-open");
+  if (module === "customers") layout.classList.add("customer-form-open");
+}
+
+function closeCrudFormPanel(module = state.module) {
+  const layout = q("#crud-layout");
+  if (!layout) return;
+  layout.classList.remove("crud-form-open");
+  if (module === "customers") layout.classList.remove("customer-form-open");
+}
+
 function openCustomerFormDialog() {
   if (state.module !== "customers") return;
-  q("#crud-layout")?.classList.add("customer-form-open");
+  openCrudFormPanel("customers");
 }
 
 function closeCustomerFormDialog() {
-  q("#crud-layout")?.classList.remove("customer-form-open");
+  closeCrudFormPanel("customers");
 }
 
 function renderForm(module, row = {}) {
@@ -8090,7 +8107,7 @@ async function renderCrud(module) {
   crudScaffold(module);
   if (q("#pdf-lang-select")) q("#pdf-lang-select").value = state.pdfLang;
   renderForm(module);
-  if (module === "customers") closeCustomerFormDialog();
+  closeCrudFormPanel(module);
   if (module === "customers") {
     await renderCustomerEstimatePanel(null);
     await renderCustomerFollowupPanel(null);
@@ -8129,7 +8146,7 @@ async function renderCrud(module) {
       state.projectTemplateHasStages = false;
     }
     renderForm(module);
-    if (module === "customers") closeCustomerFormDialog();
+    closeCrudFormPanel(module);
   });
   if (module === "customers") {
     if (q("#customer-source-filter")) {
@@ -8181,6 +8198,7 @@ async function renderCrud(module) {
       state.projectTemplateHasStages = false;
     }
     renderForm(module);
+    openCrudFormPanel(module);
     if (module === "customers") {
       renderCustomerEstimatePanel(null);
       renderCustomerFollowupPanel(null);
@@ -8244,6 +8262,7 @@ async function renderCrud(module) {
     state.projectTemplateSwitchConfirmed = false;
     state.projectTemplateHasStages = false;
     renderForm(module);
+    closeCrudFormPanel(module);
     if (module === "customers") {
       await renderCustomerEstimatePanel(null);
       await renderCustomerFollowupPanel(null);
@@ -8279,6 +8298,7 @@ async function renderCrud(module) {
       state.projectTemplateHasStages = false;
     }
     renderForm(module);
+    closeCrudFormPanel(module);
     if (module === "customers") {
       renderCustomerEstimatePanel(null);
       renderCustomerFollowupPanel(null);
@@ -8336,6 +8356,7 @@ async function renderCrud(module) {
     const row = await api(`${apiBase}/${id}`);
     state.editId = id;
     renderForm(module, row);
+    openCrudFormPanel(module);
     if (module === "customers") {
       await renderCustomerEstimatePanel(row);
       await renderCustomerFollowupPanel(row);
