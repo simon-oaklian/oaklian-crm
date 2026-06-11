@@ -458,6 +458,10 @@ const I18N = {
     value_file_category_other: "其他",
     value_yes: "是",
     value_no: "否",
+    custom_contract: "自定义合同",
+    custom_contract_placeholder: "填写自定义合同主体条款。系统仍会使用当前合同的客户、价格和付款计划。",
+    field_custom_contract_enabled: "启用自定义合同主体",
+    field_custom_contract_text: "自定义合同主体",
   },
   en: {
     app: "Decor CRM",
@@ -918,6 +922,10 @@ const I18N = {
     value_file_category_other: "Other",
     value_yes: "Yes",
     value_no: "No",
+    custom_contract: "Custom Contract",
+    custom_contract_placeholder: "Enter custom contract body terms. Customer, price, and payment schedule still come from this contract.",
+    field_custom_contract_enabled: "Use Custom Contract Body",
+    field_custom_contract_text: "Custom Contract Body",
   },
   es: {
     app: "CRM de Renovación",
@@ -1378,6 +1386,10 @@ const I18N = {
     value_file_category_other: "Otro",
     value_yes: "Sí",
     value_no: "No",
+    custom_contract: "Contrato personalizado",
+    custom_contract_placeholder: "Escriba los términos personalizados. Cliente, precio y plan de pago siguen usando este contrato.",
+    field_custom_contract_enabled: "Usar cuerpo personalizado",
+    field_custom_contract_text: "Cuerpo personalizado",
   },
 };
 
@@ -1419,7 +1431,7 @@ const CRUD_SCHEMA = {
     table: ["id", "customer_name", "source_type", "title", "status", "total_amount", "contract_generated"],
   },
   contracts: {
-    fields: ["customer_id", "project_id", "estimate_id", "title", "address", "contract_no", "total_amount", "payment_plan_json", "signed_status", "signed_date", "attachment_url"],
+    fields: ["customer_id", "project_id", "estimate_id", "title", "address", "contract_no", "total_amount", "payment_plan_json", "signed_status", "signed_date", "custom_contract_enabled", "custom_contract_text", "attachment_url"],
     table: ["id", "contract_no", "signed_status", "total_amount", "signed_date"],
   },
   projects: {
@@ -1496,6 +1508,7 @@ const state = {
   financePaymentEditId: null,
   financePrefillProjectId: null,
   financePrefillMode: "",
+  crudFormOpen: false,
 };
 
 const q = (s) => document.querySelector(s);
@@ -2336,6 +2349,7 @@ async function renderDashboard() {
 }
 
 function crudScaffold(module) {
+  state.crudFormOpen = false;
   const pdfLangCtl = (module === "estimates" || module === "contracts")
     ? `<label>${t("pdf_lang")} <select id="pdf-lang-select"><option value="zh">中文</option><option value="en">EN</option><option value="es">ES</option></select></label>`
     : "";
@@ -2407,7 +2421,7 @@ function crudScaffold(module) {
     ? `<div class="panel" id="contract-change-order-panel" style="margin-top:10px;"></div>`
     : "";
   q("#main").innerHTML = `
-    <section class="grid-main">
+    <section class="grid-main crud-form-closed">
       <article class="panel">
         <div class="row gap">
           <input id="keyword" placeholder="keyword" />
@@ -2419,7 +2433,7 @@ function crudScaffold(module) {
         </div>
         <div class="table-wrap"><table id="table"></table></div>
       </article>
-      <article class="panel">
+      <article class="panel crud-editor-panel">
         <h3 id="form-title">${t("create")}</h3>
         <form id="entity-form"></form>
         <div class="row gap">
@@ -2438,6 +2452,22 @@ function crudScaffold(module) {
       </article>
     </section>
   `;
+}
+
+function setCrudFormOpen(open) {
+  state.crudFormOpen = Boolean(open);
+  const grid = q(".grid-main");
+  if (!grid) return;
+  grid.classList.toggle("crud-form-open", state.crudFormOpen);
+  grid.classList.toggle("crud-form-closed", !state.crudFormOpen);
+}
+
+function openCrudForm() {
+  setCrudFormOpen(true);
+}
+
+function closeCrudForm() {
+  setCrudFormOpen(false);
 }
 
 function renderForm(module, row = {}) {
@@ -2478,6 +2508,13 @@ function renderForm(module, row = {}) {
     }
     if (module === "change_orders" && field === "approved_at") {
       return `<input name="${field}" type="datetime-local" value="${esc(value ?? "")}" />`;
+    }
+    if (module === "contracts" && field === "custom_contract_enabled") {
+      const selected = Number(value || 0) ? "1" : "0";
+      return `<select name="${field}"><option value="0" ${selected === "0" ? "selected" : ""}>${t("value_no")}</option><option value="1" ${selected === "1" ? "selected" : ""}>${t("value_yes")}</option></select>`;
+    }
+    if (module === "contracts" && field === "custom_contract_text") {
+      return `<textarea name="${field}" rows="8" placeholder="${esc(t("custom_contract_placeholder"))}">${esc(value ?? "")}</textarea>`;
     }
     if (module === "change_orders" && field === "amount_delta") {
       return `<input name="${field}" type="number" step="0.01" value="${esc(value ?? "")}" />`;
@@ -2616,7 +2653,8 @@ function renderTable(module, rows, progressMap = {}) {
           ? `${(r.linked_project_id || r.project_id)
             ? `<button data-act="view-project" data-id="${r.id}" data-project-id="${r.linked_project_id || r.project_id}" class="secondary">${t("view_project")}</button>`
             : `<button data-act="gen-project" data-id="${r.id}">${t("generate_project")}</button>`}
-             <button data-act="contract-pdf" data-id="${r.id}">${t("contract_pdf")}</button>`
+             <button data-act="contract-pdf" data-id="${r.id}">${t("contract_pdf")}</button>
+             <button data-act="custom-contract" data-id="${r.id}" class="secondary">${t("custom_contract")}</button>`
           : ""}
         ${module === "change_orders"
           ? `${normalizeEnum(r.status) === "draft" ? `<button data-act="mark-sent" data-id="${r.id}" class="secondary">${t("mark_sent")}</button>` : ""}
@@ -4279,6 +4317,7 @@ async function renderCrud(module) {
   }
   q("#new-btn").addEventListener("click", () => {
     state.editId = null;
+    openCrudForm();
     renderForm(module);
     if (module === "customers") {
       renderCustomerEstimatePanel(null);
@@ -4314,6 +4353,7 @@ async function renderCrud(module) {
       await api(`${apiBase}`, { method: "POST", body: JSON.stringify(data) });
     }
     state.editId = null;
+    closeCrudForm();
     renderForm(module);
     if (module === "customers") {
       await renderCustomerEstimatePanel(null);
@@ -4343,6 +4383,7 @@ async function renderCrud(module) {
   q("#reset-btn").addEventListener("click", () => {
     state.editId = null;
     if (module === "contracts") state.editingMilestoneId = null;
+    closeCrudForm();
     renderForm(module);
     if (module === "customers") {
       renderCustomerEstimatePanel(null);
@@ -4397,6 +4438,7 @@ async function renderCrud(module) {
     if (act === "edit") {
       const row = await api(`${apiBase}/${id}`);
       state.editId = id;
+      openCrudForm();
       if (module === "contracts") {
         state.contractMilestoneContractId = Number(id);
         state.editingMilestoneId = null;
@@ -4425,6 +4467,27 @@ async function renderCrud(module) {
           defaultCategory: module === "estimates" ? "estimate" : "contract",
         });
       }
+      return;
+    }
+    if (act === "custom-contract" && module === "contracts") {
+      const row = await api(`${apiBase}/${id}`);
+      state.editId = id;
+      openCrudForm();
+      state.contractMilestoneContractId = Number(id);
+      state.editingMilestoneId = null;
+      const data = { ...row, custom_contract_enabled: Number(row.custom_contract_enabled || 0) ? 1 : 1 };
+      renderForm(module, data);
+      await renderRecordLinkPanel(module, row);
+      await renderEntityAttachmentPanel({
+        hostSelector: "#record-file-panel",
+        entityType: "contract",
+        entityId: row.id,
+        title: t("contract_attachments"),
+        defaultCategory: "contract",
+      });
+      await renderContractMilestonePanel();
+      await renderContractChangeOrderPanel(row);
+      setTimeout(() => q('[name="custom_contract_text"]')?.focus(), 50);
       return;
     }
     if (act === "mark-sent" && module === "change_orders") {

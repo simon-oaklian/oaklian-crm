@@ -117,6 +117,10 @@ button.danger { background: var(--warn); }
 .grid-2 { margin-top: 10px; display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-2.compact { margin-top: 0; gap: 8px; }
 .grid-main { margin-top: 12px; display: grid; gap: 10px; grid-template-columns: 2fr 1fr; }
+.grid-main.crud-form-closed { grid-template-columns: 1fr; }
+.grid-main.crud-form-closed .crud-editor-panel { display: none; }
+.grid-main.crud-form-open { grid-template-columns: 2fr 1fr; }
+
 
 .table-wrap { margin-top: 10px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }

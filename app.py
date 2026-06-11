@@ -237,6 +237,8 @@ TABLE_FIELDS = {
         "signed_at",
         "signed_by",
         "sign_note",
+        "custom_contract_enabled",
+        "custom_contract_text",
         "attachment_url",
     ],
     "projects": [
@@ -799,6 +801,8 @@ def init_db():
             signed_at TEXT,
             signed_by INTEGER,
             sign_note TEXT,
+            custom_contract_enabled INTEGER DEFAULT 0,
+            custom_contract_text TEXT,
             attachment_url TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -1281,6 +1285,8 @@ def init_db():
             "signed_at": "TEXT",
             "signed_by": "INTEGER",
             "sign_note": "TEXT",
+            "custom_contract_enabled": "INTEGER DEFAULT 0",
+            "custom_contract_text": "TEXT",
             "estimate_snapshot_updated_at": "TEXT",
             "estimate_snapshot_total_amount": "REAL",
         },
@@ -11182,8 +11188,22 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
         plan_rows = "".join(plan_row_parts)
         if not plan_rows:
             plan_rows = f"<tr><td colspan='4'>{txt['no_payment_plan']}</td></tr>"
+        try:
+            custom_contract_enabled = int(contract.get("custom_contract_enabled") or 0) == 1
+        except (TypeError, ValueError):
+            custom_contract_enabled = False
+        custom_contract_text = str(contract.get("custom_contract_text") or "").strip()
         contract_terms = txt.get("contract_terms_sections") or []
-        if contract_terms:
+        if custom_contract_enabled and custom_contract_text:
+            custom_chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", custom_contract_text) if chunk.strip()]
+            custom_terms_html = "".join(
+                f"<p>{html_escape(chunk).replace(chr(10), '<br>')}</p>" for chunk in custom_chunks
+            )
+            terms_html = (
+                f"<section class='doc-section terms-section'><h3>{txt['terms']}</h3>"
+                f"<div class='custom-contract-text'>{custom_terms_html}</div></section>"
+            )
+        elif contract_terms:
             terms_rows = []
             if clause_text:
                 terms_rows.append(f"<p class='terms-lead'>{html_escape(clause_text)}</p>")
@@ -11241,6 +11261,8 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
 .term-item{{break-inside:avoid;page-break-inside:avoid;margin:0 0 7px}}
 .term-item h4{{font-size:12px;margin:0 0 2px;color:#111827}}
 .term-item p{{font-size:10.8px;line-height:1.35;margin:0;color:#334155}}
+.custom-contract-text{{border-top:1px solid #d1d5db;padding-top:8px}}
+.custom-contract-text p{{font-size:11.2px;line-height:1.42;margin:0 0 8px;color:#334155;break-inside:avoid;page-break-inside:avoid}}
 .signature-section{{break-inside:avoid;page-break-inside:avoid;margin-top:20px}}
 .exhibit-section{{break-inside:auto;page-break-inside:auto;page-break-before:always;margin-top:0;border-top:2px solid #111827;padding-top:12px}}
 .exhibit-note{{font-size:11.5px;color:#64748b;margin:0 0 8px}}
