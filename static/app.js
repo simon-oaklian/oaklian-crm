@@ -1431,7 +1431,7 @@ const CRUD_SCHEMA = {
     table: ["id", "customer_name", "source_type", "title", "status", "total_amount", "contract_generated"],
   },
   contracts: {
-    fields: ["customer_id", "project_id", "estimate_id", "title", "address", "contract_no", "total_amount", "payment_plan_json", "signed_status", "signed_date", "custom_contract_enabled", "custom_contract_text", "attachment_url"],
+    fields: ["customer_id", "project_id", "estimate_id", "title", "address", "contract_no", "total_amount", "payment_plan_json", "signed_status", "signed_date", "attachment_url"],
     table: ["id", "contract_no", "signed_status", "total_amount", "signed_date"],
   },
   projects: {
@@ -2653,8 +2653,7 @@ function renderTable(module, rows, progressMap = {}) {
           ? `${(r.linked_project_id || r.project_id)
             ? `<button data-act="view-project" data-id="${r.id}" data-project-id="${r.linked_project_id || r.project_id}" class="secondary">${t("view_project")}</button>`
             : `<button data-act="gen-project" data-id="${r.id}">${t("generate_project")}</button>`}
-             <button data-act="contract-pdf" data-id="${r.id}">${t("contract_pdf")}</button>
-             <button data-act="custom-contract" data-id="${r.id}" class="secondary">${t("custom_contract")}</button>`
+             <button data-act="contract-pdf" data-id="${r.id}">${t("contract_pdf")}</button>`
           : ""}
         ${module === "change_orders"
           ? `${normalizeEnum(r.status) === "draft" ? `<button data-act="mark-sent" data-id="${r.id}" class="secondary">${t("mark_sent")}</button>` : ""}

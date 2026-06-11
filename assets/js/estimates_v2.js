@@ -828,7 +828,7 @@
         <span>${tt("ev2_pm_total_label", "合计百分比 / 合计金额")}</span>
         <span class="ev2-row">
           <span class="ev2-pill ${okPct ? 'ev2-pill-ok' : 'ev2-pill-warn'}" id="ev2-pm-pct-pill">${sumPct.toFixed(1)}% ${okPct ? '✓' : '⚠'}</span>
-          <span class="num">${fmtMoney(total * sumPct / 100)}</span>
+          <span class="num" id="ev2-pm-amount-total">${fmtMoney(total * sumPct / 100)}</span>
         </span>
       </div>
     `;
@@ -1319,6 +1319,8 @@
       pill.textContent = `${sum.toFixed(1)}% ${ok ? "✓" : "⚠"}`;
       pill.className = "ev2-pill " + (ok ? "ev2-pill-ok" : "ev2-pill-warn");
     }
+    const amountTotal = $("#ev2-pm-amount-total");
+    if (amountTotal) amountTotal.textContent = fmtMoney(total * sum / 100);
   }
 
   function onAddMilestone() {
