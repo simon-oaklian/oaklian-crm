@@ -6429,42 +6429,23 @@ async function renderStageTemplates() {
 function renderContractActionGroup(r) {
   const signStatus = normalizeEnum(r.sign_status || "draft");
   const projectId = r.linked_project_id || r.project_id;
-  const projectAction = projectId
-    ? `<button data-act="view-project" data-id="${r.id}" data-project-id="${projectId}" class="secondary">${t("view_project")}</button>`
-    : signStatus === "signed"
-      ? `<button data-act="gen-project" data-id="${r.id}" class="secondary">${t("generate_project")}</button>`
-      : `<span class="inline-badge">${t("contract_sign_before_project")}</span>`;
-  let mainAction = "";
-  const secondaryActions = [];
-
+  const s = 'font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;white-space:nowrap';
+  let mainBtn = "";
   if (signStatus === "draft") {
-    mainAction = `<button data-act="mark-contract-sent" data-id="${r.id}" class="contract-main-btn">${t("mark_sent")}</button>`;
-    secondaryActions.push(projectAction);
+    mainBtn = `<button data-act="mark-contract-sent" data-id="${r.id}" style="${s};background:#111;color:#fff;border:none;font-weight:500">标记已发送</button>`;
   } else if (signStatus === "sent") {
-    mainAction = `<button data-act="mark-contract-signed" data-id="${r.id}" class="contract-main-btn">${t("mark_signed")}</button>`;
-    secondaryActions.push(projectAction);
+    mainBtn = `<button data-act="mark-contract-signed" data-id="${r.id}" style="${s};background:#111;color:#fff;border:none;font-weight:500">标记已签署</button>`;
+  } else if (projectId) {
+    mainBtn = `<button data-act="view-project" data-id="${r.id}" data-project-id="${projectId}" style="${s};background:#111;color:#fff;border:none;font-weight:500">查看项目</button>`;
   } else {
-    mainAction = projectId
-      ? `<button data-act="view-project" data-id="${r.id}" data-project-id="${projectId}" class="contract-main-btn">${t("view_project")}</button>`
-      : `<button data-act="gen-project" data-id="${r.id}" class="contract-main-btn">${t("generate_project")}</button>`;
+    mainBtn = `<button data-act="gen-project" data-id="${r.id}" style="${s};background:#111;color:#fff;border:none;font-weight:500">生成项目</button>`;
   }
-
-  secondaryActions.push(`<button data-act="contract-pdf" data-id="${r.id}" class="secondary">${t("contract_pdf")}</button>`);
-
-  return `
-    <div class="contract-action-cluster">
-      ${mainAction}
-      ${secondaryActions.join("")}
-      ${signStatus === "signed" ? `<span class="inline-badge">${t("can_generate_project_hint")}</span>` : ""}
-      <div class="contract-more-wrap">
-        <button type="button" class="secondary" data-act="toggle-contract-more" data-id="${r.id}">${t("more_actions")}</button>
-        <div class="contract-more-menu hidden">
-          <button data-act="contract-detail" data-id="${r.id}" class="secondary">详情</button>
-          <button data-act="del" data-id="${r.id}" class="danger">${t("del")}</button>
-        </div>
-      </div>
-    </div>
-  `;
+  const projectHint = !projectId && signStatus !== "signed"
+    ? `<span style="font-size:10px;color:#9ca3af">签署后可建项目</span>` : "";
+  const pdfBtn = `<button data-act="contract-pdf" data-id="${r.id}" style="${s};background:#fff;border:1px solid #d1d5db;color:#374151">PDF</button>`;
+  const detailBtn = `<button data-act="contract-detail" data-id="${r.id}" style="${s};background:#fff;border:1px solid #d1d5db;color:#374151">详情</button>`;
+  const delBtn = `<button data-act="del" data-id="${r.id}" style="${s};background:#fff;border:1px solid #fca5a5;color:#ef4444">删除</button>`;
+  return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${mainBtn}${pdfBtn}${detailBtn}${delBtn}${projectHint}</div>`;
 }
 
 function normalizeModuleList(value) {
