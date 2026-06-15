@@ -12,6 +12,8 @@ const I18N = {
     customers: "客户/线索",
     estimates: "报价/方案",
     contracts: "合同/付款计划",
+    contracts_group: "合同",
+    document_templates: "合同模板",
     projects: "项目/工地",
     designer_applications: "设计师申请池",
     designers: "正式设计师",
@@ -396,7 +398,16 @@ const I18N = {
     field_template_type: "模板类型",
     field_project_type: "项目类型",
     field_is_default: "默认模板",
-    field_title_text: "标题区文本",
+    field_title_text: "标题（中文）",
+    field_title_text_en: "标题（英文）",
+    field_intro_text: "引言（中文）",
+    field_intro_text_en: "引言（英文）",
+    field_terms_text: "条款（中文）",
+    field_terms_text_en: "条款（英文）",
+    field_note_text: "备注（中文）",
+    field_note_text_en: "备注（英文）",
+    field_footer_text: "页脚（中文）",
+    field_footer_text_en: "页脚（英文）",
     field_intro_text: "开场说明",
     field_note_text: "默认备注",
     field_terms_text: "默认条款",
@@ -891,6 +902,8 @@ const I18N = {
     customers: "Customers",
     estimates: "Estimates",
     contracts: "Contracts",
+    contracts_group: "Contracts",
+    document_templates: "Contract Templates",
     projects: "Projects",
     designer_applications: "Designer Applications",
     designers: "Designers",
@@ -2731,7 +2744,7 @@ const CRUD_SCHEMA = {
       "designer_commission_base",
       "notes",
     ],
-    table: ["id", "name", "status", "progress_pct", "manager", "designer_name", "estimated_finish_date"],
+    table: ["id", "name", "customer_name", "status", "progress_pct", "manager", "designer_name", "estimated_finish_date"],
   },
   designer_applications: {
     fields: [
@@ -2829,10 +2842,15 @@ const CRUD_SCHEMA = {
       "project_type",
       "is_default",
       "title_text",
+      "title_text_en",
       "intro_text",
+      "intro_text_en",
       "note_text",
+      "note_text_en",
       "terms_text",
+      "terms_text_en",
       "footer_text",
+      "footer_text_en",
     ],
     table: ["id", "name", "template_type", "project_type", "is_default", "updated_at"],
   },
@@ -3733,17 +3751,359 @@ async function openContractDetail(contractId) {
   state.editingMilestoneId = null;
   await renderApp();
   const row = await api(`/api/contracts/${cid}`);
-  renderForm("contracts", row);
-  await renderRecordLinkPanel("contracts", row);
-  await renderEntityAttachmentPanel({
-    hostSelector: "#record-file-panel",
-    entityType: "contract",
-    entityId: row.id,
-    title: t("contract_attachments"),
-    defaultCategory: "contract",
-  });
-  await renderContractChangeOrderPanel(row);
+  await renderContractDetailView(row);
+  // 隐藏重复的来源关联和附件面板
+  const rlp = q("#record-link-panel");
+  if (rlp) rlp.style.display = "none";
+  const rfp = q("#record-file-panel");
+  if (rfp) rfp.style.display = "none";
+  const cmp = q("#contract-milestone-panel");
+  if (cmp) cmp.style.display = "none";
+  const cop = q("#contract-change-order-panel");
+  if (cop) cop.style.display = "none";
   openCrudFormPanel("contracts");
+}
+
+async function renderContractDetailView(row) {
+  const form = document.getElementById("entity-form");
+  if (!form) return;
+  const saveBtn = document.getElementById("save-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  const formTitle = document.getElementById("form-title");
+  if (saveBtn) saveBtn.style.display = "none";
+  if (resetBtn) resetBtn.style.display = "none";
+  if (formTitle) formTitle.textContent = row.contract_no || "合同详情";
+
+  const signStatus = normalizeEnum(row.sign_status || "draft");
+  const signColor = signStatus === "signed" ? "#22c55e" : signStatus === "sent" ? "#f59e0b" : "#9ca3af";
+  const signLabel = signStatus === "signed" ? "已签署" : signStatus === "sent" ? "已发送" : "草稿";
+  const isSigned = signStatus === "signed";
+  const money = (v) => v != null && v !== "" ? "$" + Number(v).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}) : "-";
+
+  // 拉付款节点
+  let milestones = [];
+  try {
+    const ms = await api(`/api/contracts/${row.id}/payment-milestones`);
+    milestones = ms.items || ms || [];
+  } catch(e) { milestones = []; }
+
+  const msRows = milestones.length ? milestones.map(m => `
+    <tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px">${esc(m.name || "-")}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${esc(m.trigger_reason || m.trigger_type || "-")}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;text-align:right;font-weight:500">${money(m.amount_due)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:11px;text-align:center">
+        <span style="padding:2px 8px;border-radius:10px;${m.paid ? "background:#dcfce7;color:#166534" : "background:#f3f4f6;color:#6b7280"}">${m.paid ? "已收款" : "未收款"}</span>
+      </td>
+    </tr>`).join("") : `<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af;font-size:13px">暂无付款节点</td></tr>`;
+
+  const termsHtml = row.custom_contract_text
+    ? `<div style="font-size:13px;line-height:1.85;color:#374151;white-space:pre-wrap;padding:14px;background:#fafafa;border:1px solid #e5e7eb;border-radius:6px">${(row.custom_contract_text||"").replace(/\n/g,"<br>")}</div>`
+    : `<div style="font-size:13px;color:#9ca3af;padding:12px;background:#fafafa;border:1px solid #e5e7eb;border-radius:6px;text-align:center">暂无自定义条款，点「编辑条款」添加</div>`;
+
+  form.innerHTML = `
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+
+    <!-- 顶部操作栏 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:10px 14px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;font-weight:600;color:#111">${esc(row.contract_no || "-")}</span>
+        <span style="font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600;background:${signColor}18;color:${signColor};border:1px solid ${signColor}44">${signLabel}</span>
+        ${row.customer_signature_image ? '<span style="font-size:11px;padding:2px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:1px solid #86efac">✓ 客户已签署</span>' : ""}
+      </div>
+      <div style="display:flex;gap:6px">
+        ${!isSigned ? `<button id="contract-edit-terms-btn" type="button" style="font-size:12px;padding:5px 11px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;color:#374151">✏️ 编辑条款</button><button id="contract-apply-tpl-btn" type="button" style="font-size:12px;padding:5px 11px;border-radius:6px;border:1px solid #6366f1;background:#eef2ff;cursor:pointer;color:#4338ca">📋 套用模板</button>` : ""}
+        <button id="contract-edit-btn" type="button" style="font-size:12px;padding:5px 11px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;color:#374151">⚙️ 编辑信息</button>
+      <button id="contract-history-btn" type="button" style="font-size:12px;padding:5px 11px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;color:#374151">📋 变更记录</button>
+      </div>
+    </div>
+
+    <!-- 客户与项目信息 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">客户信息</div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">姓名</div>
+          <div style="font-size:14px;font-weight:600;color:#111">${esc(row.customer_name || "-")}</div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">电话</div>
+          <div style="font-size:13px;color:#374151">${esc(row.customer_phone || "-")}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">邮箱</div>
+          <div style="font-size:13px;color:#374151">${esc(row.customer_email || "-")}</div>
+        </div>
+      </div>
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">项目信息</div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">项目名称</div>
+          <div style="font-size:13px;font-weight:500;color:#374151">${esc(row.title || "-")}</div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">项目地址</div>
+          <div style="font-size:13px;color:#374151">${esc(row.address || "-")}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">签字日期</div>
+          <div style="font-size:13px;color:#374151">${esc((row.signed_date || "").toString().slice(0,10) || "-")}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 合同金额 -->
+    <div style="padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">合同总额</div>
+        <div style="font-size:26px;font-weight:700;color:#111">${money(row.total_amount)}</div>
+        ${row.approved_change_amount && Number(row.approved_change_amount) !== 0 ? `<div style="font-size:12px;color:#f59e0b;margin-top:3px">含已批变更 ${money(row.approved_change_amount)} → 当前总额 ${money(row.current_contract_total)}</div>` : ""}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:2px">合同编号</div>
+        <div style="font-size:13px;font-weight:600;color:#374151">${esc(row.contract_no || "-")}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px">创建于 ${esc((row.created_at || "").toString().slice(0,10))}</div>
+      </div>
+    </div>
+
+    <!-- 付款节点 -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">付款节点</div>
+      <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">节点名称</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">触发条件</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">金额</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">状态</th>
+            </tr>
+          </thead>
+          <tbody>${msRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 补充条款 -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">补充条款 / 特殊备注</div>
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:8px">标准合同条款见 PDF 打印版。此处可添加项目特定补充说明。</div>
+      <div id="contract-terms-display">${row.custom_contract_text
+        ? `<div style="font-size:13px;line-height:1.85;color:#374151;white-space:pre-wrap;padding:14px;background:#fafafa;border:1px solid #e5e7eb;border-radius:6px">${(row.custom_contract_text||"").replace(/\n/g,"<br>")}</div>`
+        : `<div style="font-size:13px;color:#9ca3af;padding:10px 14px;background:#fafafa;border:1px solid #e5e7eb;border-radius:6px">暂无补充条款</div>`
+      }</div>
+      ${!isSigned ? `
+      <div id="contract-terms-editor" style="display:none;margin-top:8px">
+        <textarea id="contract-terms-input" style="width:100%;min-height:140px;padding:12px;border:1px solid #6366f1;border-radius:6px;font-size:13px;line-height:1.75;font-family:inherit;resize:vertical" placeholder="输入项目特定补充条款，例如：特殊材料要求、客户自购材料说明、特定施工时间限制等...">${esc(row.custom_contract_text || "")}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="save-terms-btn" type="button" style="padding:7px 16px;background:#111;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500">保存</button>
+          <button id="cancel-terms-btn" type="button" style="padding:7px 14px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;font-size:13px;cursor:pointer">取消</button>
+        </div>
+      </div>` : '<div style="font-size:12px;color:#9ca3af;margin-top:6px;padding:6px 10px;background:#fef3c7;border-radius:4px;border:1px solid #fde68a">🔒 合同已签署，不可修改</div>'}
+    </div>
+
+    <!-- 标准条款 -->
+    <!-- 内部操作 -->
+    <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #e0e7ff;border-radius:8px;background:#eef2ff">
+      <div style="font-size:10px;font-weight:700;color:#6366f1;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">内部操作</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${!row.customer_signature_image && signStatus !== "signed"
+          ? `<button id="int-send-sign-btn" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #6366f1;background:#fff;cursor:pointer;color:#6366f1">📤 发送签署链接</button>`
+          : ""}
+        ${row.customer_signature_image && signStatus !== "signed"
+          ? `<button id="int-confirm-sign-btn" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:none;background:#22c55e;cursor:pointer;color:#fff;font-weight:500">✅ 内部确认签署</button>`
+          : ""}
+        ${signStatus === "signed" && !(row.linked_project_id || row.project_id)
+          ? `<button id="int-gen-project-btn" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:none;background:#111;cursor:pointer;color:#fff;font-weight:500">🚀 生成项目</button>`
+          : ""}
+        ${(row.linked_project_id || row.project_id)
+          ? `<button id="int-view-project-btn" data-project-id="${row.linked_project_id || row.project_id}" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;color:#374151">📁 查看项目</button>`
+          : ""}
+        <button id="int-pdf-btn" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;color:#374151">🖨️ 打印/PDF</button>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase">标准合同条款</div>
+        <a href="/print/contract/${row.id}?lang=en" target="_blank" style="font-size:12px;color:#6366f1;text-decoration:none;padding:3px 10px;border:1px solid #c7d2fe;border-radius:4px;background:#eef2ff">📄 查看完整PDF</a>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <div style="padding:10px 14px;background:#f9fafb;font-size:12px;color:#6b7280;border-bottom:1px solid #e5e7eb">
+          以下为本合同标准条款摘要，完整版本见合同PDF
+        </div>
+        <div style="padding:12px 14px;font-size:12px;line-height:1.7;color:#374151">
+          <div style="margin-bottom:8px"><b>1. 工作范围</b> — 承包商将按照估价单所述范围施工，未列明项目须通过书面变更单确认。</div>
+          <div style="margin-bottom:8px"><b>2. 合同价格与付款</b> — 客户按付款节点支付款项，逾期付款可能导致工期延误。</div>
+          <div style="margin-bottom:8px"><b>3. 工期与现场</b> — 预计工期受材料供应、天气等因素影响，客户须提供合理现场配合。</div>
+          <div style="margin-bottom:8px"><b>4. 变更单</b> — 任何范围、价格或材料变更须在施工前以书面变更单形式确认。</div>
+          <div style="margin-bottom:8px"><b>5. 保修</b> — 施工工艺质保，不包括正常磨损、客户供材或第三方施工部分。</div>
+          <div><b>6. 争议解决</b> — 双方先行协商；协商不成，按适用法律规定程序解决。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 签署状态 -->
+    <div style="padding:12px 14px;border:1px solid ${signColor}44;border-radius:8px;background:${signColor}08">
+      <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">签署状态</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:3px">整体状态</div>
+          <div style="font-size:13px;font-weight:600;color:${signColor}">${signLabel}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:3px">客户签署</div>
+          <div style="font-size:13px;font-weight:500;color:${row.customer_signature_image ? "#22c55e" : "#9ca3af"}">${row.customer_signature_image ? "✓ 已签署" : "未签署"}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // 内部操作按钮
+  document.getElementById("int-send-sign-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("int-send-sign-btn");
+    btn.textContent = "生成中..."; btn.disabled = true;
+    const r = await api(`/api/contracts/${row.id}/generate-sign-link`, { method: "POST" });
+    if (r.sign_url) {
+      const full = window.location.origin + r.sign_url;
+      await navigator.clipboard.writeText(full).catch(() => {});
+      alert("签署链接已复制：\n" + full + "\n\n请通过微信/邮件/短信发送给客户。");
+      const updated = await api(`/api/contracts/${row.id}`);
+      await renderContractDetailView(updated);
+    } else { btn.textContent = "发送签署链接"; btn.disabled = false; }
+  });
+  document.getElementById("int-confirm-sign-btn")?.addEventListener("click", async () => {
+    if (!confirm("确认内部签署？合同状态将变为已签署。")) return;
+    const btn = document.getElementById("int-confirm-sign-btn");
+    btn.textContent = "处理中..."; btn.disabled = true;
+    await api(`/api/contracts/${row.id}/mark-signed`, { method: "POST" });
+    const updated = await api(`/api/contracts/${row.id}`);
+    await renderContractDetailView(updated);
+    await loadCrud("contracts");
+  });
+  document.getElementById("int-gen-project-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("int-gen-project-btn");
+    btn.textContent = "生成中..."; btn.disabled = true;
+    try {
+      const r = await api(`/api/contracts/${row.id}/generate-project`, { method: "POST" });
+      if (r.project?.id) {
+        btn.textContent = "✓ 已生成";
+        setTimeout(async () => {
+          await openProjectDetail(r.project.id);
+        }, 500);
+      }
+    } catch(e) { btn.textContent = "生成项目"; btn.disabled = false; }
+  });
+  document.getElementById("int-view-project-btn")?.addEventListener("click", () => {
+    const pid = document.getElementById("int-view-project-btn")?.dataset.projectId;
+    if (pid) openProjectDetail(Number(pid));
+  });
+  document.getElementById("int-pdf-btn")?.addEventListener("click", () => {
+    window.open(`/print/contract/${row.id}?lang=en`, "_blank");
+  });
+
+  // 变更记录
+  document.getElementById("contract-history-btn")?.addEventListener("click", async () => {
+    const r = await api(`/api/contracts/${row.id}/change-log`);
+    const items = r.items || [];
+    const fieldMap = {
+      custom_contract_text: "补充条款",
+      total_amount: "合同总额",
+      title: "项目标题",
+      address: "项目地址",
+      customer_id: "客户",
+      apply_template: "套用模板"
+    };
+    const rows = items.length ? items.map(i => `
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:8px 10px;font-size:12px;color:#6b7280">${esc(i.created_at?.slice(0,16) || "")}</td>
+        <td style="padding:8px 10px;font-size:12px">${esc(fieldMap[i.field_name] || i.field_name || i.change_type || "-")}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#6b7280">${esc(i.username || "系统")}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#374151;max-width:200px;word-break:break-all">${esc((i.new_value || "").slice(0,80))}${(i.new_value||"").length > 80 ? "..." : ""}</td>
+      </tr>`).join("") : '<tr><td colspan="4" style="padding:16px;text-align:center;color:#9ca3af">暂无变更记录</td></tr>';
+    const modal = document.createElement("div");
+    modal.style.cssText = "position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center";
+    modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:min(700px,calc(100vw-32px));max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e5e7eb">
+        <span style="font-size:14px;font-weight:600">变更记录 · ${esc(row.contract_no || "")}</span>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;color:#9ca3af">×</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb">
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">时间</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">修改字段</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">操作人</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">新内容</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+    modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  });
+
+  // 编辑条款
+  document.getElementById("contract-apply-tpl-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("contract-apply-tpl-btn");
+    if (!confirm("套用默认合同模板？现有条款将被替换。")) return;
+    btn.textContent = "套用中..."; btn.disabled = true;
+    try {
+      const lang = document.documentElement.lang === "en" ? "en" : "zh";
+      const r = await api(`/api/contracts/${row.id}/apply-template`, {
+        method: "POST",
+        body: JSON.stringify({ lang })
+      });
+      if (r.ok) {
+        btn.textContent = "✓ 已套用";
+        setTimeout(async () => {
+          const updated = await api(`/api/contracts/${row.id}`);
+          await renderContractDetailView(updated);
+        }, 600);
+      }
+    } catch(e) {
+      btn.textContent = "套用失败"; btn.disabled = false;
+    }
+  });
+  document.getElementById("contract-edit-terms-btn")?.addEventListener("click", () => {
+    document.getElementById("contract-terms-display").style.display = "none";
+    document.getElementById("contract-terms-editor").style.display = "block";
+    document.getElementById("contract-terms-input")?.focus();
+  });
+  document.getElementById("cancel-terms-btn")?.addEventListener("click", () => {
+    document.getElementById("contract-terms-display").style.display = "block";
+    document.getElementById("contract-terms-editor").style.display = "none";
+  });
+  document.getElementById("save-terms-btn")?.addEventListener("click", async () => {
+    const text = document.getElementById("contract-terms-input")?.value || "";
+    const btn = document.getElementById("save-terms-btn");
+    btn.textContent = "保存中..."; btn.disabled = true;
+    try {
+      await api(`/api/contracts/${row.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ custom_contract_text: text, custom_contract_enabled: text ? 1 : 0 })
+      });
+      btn.textContent = "✓ 已保存";
+      setTimeout(async () => {
+        const updated = await api(`/api/contracts/${row.id}`);
+        await renderContractDetailView(updated);
+      }, 800);
+    } catch(e) {
+      btn.textContent = "保存失败"; btn.disabled = false;
+    }
+  });
+
+  // 编辑信息
+  document.getElementById("contract-edit-btn")?.addEventListener("click", () => switchToContractEdit(row.id));
+}
+
+async function switchToContractEdit(contractId) {
+  const row = await api(`/api/contracts/${contractId}`);
+  const saveBtn = document.getElementById("save-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  const formTitle = document.getElementById("form-title");
+  if (saveBtn) saveBtn.style.display = "";
+  if (resetBtn) resetBtn.style.display = "";
+  if (formTitle) formTitle.textContent = "编辑合同";
+  renderForm("contracts", row);
 }
 
 async function openCustomerDetail(customerId) {
@@ -5033,6 +5393,7 @@ function crudScaffold(module) {
           ${documentTemplateFilterCtl}
           ${documentsFilterCtl}
           ${pdfLangCtl}
+          ${module === "contracts" && (state.user?.role === "owner" || state.user?.role === "manager") ? `<button id="contract-template-btn" class="secondary" style="font-size:12px">📋 合同模板</button>` : ""}
         </div>
         <div class="table-wrap"><table id="table"></table></div>
         ${isCustomerCrud ? `<div id="customer-mobile-cards" class="customer-mobile-cards"></div>` : `<div id="crud-mobile-cards" class="crud-mobile-cards"></div>`}
@@ -5207,9 +5568,10 @@ function renderForm(module, row = {}) {
     }
     if (
       module === "document_templates"
-      && ["title_text", "intro_text", "note_text", "terms_text", "footer_text"].includes(field)
+      && ["title_text", "title_text_en", "intro_text", "intro_text_en", "note_text", "note_text_en", "terms_text", "terms_text_en", "footer_text", "footer_text_en"].includes(field)
     ) {
-      return `<textarea name="${field}" rows="3">${esc(value ?? "")}</textarea>`;
+      const rows = field.includes("terms_text") ? "8" : "3";
+      return `<textarea name="${field}" rows="${rows}" style="font-size:12px">${esc(value ?? "")}</textarea>`;
     }
     if (field === "notes" || field === "source_note") {
       return `<textarea name="${field}" rows="3">${esc(value ?? "")}</textarea>`;
@@ -6097,7 +6459,7 @@ function renderContractActionGroup(r) {
       <div class="contract-more-wrap">
         <button type="button" class="secondary" data-act="toggle-contract-more" data-id="${r.id}">${t("more_actions")}</button>
         <div class="contract-more-menu hidden">
-          <button data-act="edit" data-id="${r.id}" class="secondary">${t("edit")}</button>
+          <button data-act="contract-detail" data-id="${r.id}" class="secondary">详情</button>
           <button data-act="del" data-id="${r.id}" class="danger">${t("del")}</button>
         </div>
       </div>
@@ -6150,6 +6512,9 @@ function renderTable(module, rows, progressMap = {}) {
       }
       if (module === "contracts" && col === "sign_status") {
         return `<td data-col="${col}"><span class="co-status-pill ${approvalStatusClass(r.sign_status, "contract")}">${displayValue("sign_status", r.sign_status || "draft")}</span></td>`;
+      }
+      if (module === "contracts" && col === "contract_no") {
+        return `<td data-col="${col}"><div style="font-weight:500">${esc(r.contract_no || "-")}</div>${r.customer_name ? `<div style="font-size:11px;color:#9ca3af;margin-top:2px">${esc(r.customer_name)}</div>` : ""}</td>`;
       }
       if (module === "designer_applications" && col === "status") {
         return `<td data-col="${col}">${renderStatusPill("status", r.status || "pending")}</td>`;
@@ -8098,6 +8463,23 @@ async function renderRecordLinkPanel(module, row = null) {
       }
       if (act === "export-contract-pdf") {
         window.open(`/api/contracts/${btn.dataset.contractId}/pdf?lang=${encodeURIComponent(state.pdfLang)}`, "_blank");
+        return;
+      }
+      if (act === "generate-sign-link") {
+        const r = await api(`/api/contracts/${btn.dataset.contractId}/generate-sign-link`, { method: "POST" });
+        if (r.sign_url) {
+          const full = window.location.origin + r.sign_url;
+          await navigator.clipboard.writeText(full).catch(() => {});
+          alert("签署链接已生成并复制到剪贴板：\n" + full);
+          await openContractDetail(Number(btn.dataset.contractId));
+        }
+        return;
+      }
+      if (act === "copy-sign-link") {
+        const full = window.location.origin + "/sign/" + btn.dataset.token;
+        await navigator.clipboard.writeText(full).catch(() => {});
+        alert("链接已复制：\n" + full);
+        return;
       }
     });
   });
@@ -8137,7 +8519,102 @@ async function renderCrud(module) {
   if (module === "change_orders") await renderChangeOrderProjectFilter();
 
   q("#search-btn")?.addEventListener("click", () => loadCrud(module));
+  q("#contract-template-btn")?.addEventListener("click", async () => {
+    const tpls = await api("/api/document-templates?template_type=contract");
+    const list = tpls.items || tpls || [];
+    const tpl = list.find(t => t.template_type === "contract") || list[0] || {};
+    const modal = document.createElement("div");
+    modal.style.cssText = "position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);display:flex;align-items:stretch;justify-content:center;padding:60px 20px 20px";
+    modal.innerHTML = `
+    <div style="background:#fff;border-radius:10px;width:100%;max-width:1200px;height:100%;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1">
+        <div>
+          <span style="font-size:15px;font-weight:600">合同模板编辑</span>
+          <span style="font-size:12px;color:#9ca3af;margin-left:8px">修改后所有新生成合同将使用新模板</span>
+        </div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="border:none;background:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1">×</button>
+      </div>
+      <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;flex:1;overflow-y:auto;min-height:0">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6366f1;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">🇨🇳 中文版本</div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">引言</label>
+            <textarea id="tpl-intro-zh" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;line-height:1.6;resize:vertical;min-height:90px;font-family:inherit">${(tpl.intro_text || "").replace(/\\n/g, "\n")}</textarea>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">条款正文</label>
+            <textarea id="tpl-terms-zh" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;line-height:1.6;resize:vertical;min-height:260px;font-family:inherit">${(tpl.terms_text || "").replace(/\\n/g, "\n")}</textarea>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">备注</label>
+            <textarea id="tpl-note-zh" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;line-height:1.6;resize:vertical;min-height:80px;font-family:inherit">${(tpl.note_text || "").replace(/\\n/g, "\n")}</textarea>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#0891b2;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">🇺🇸 English Version</div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Intro</label>
+            <textarea id="tpl-intro-en" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;line-height:1.6;resize:vertical;min-height:90px;font-family:inherit">${(tpl.intro_text_en || "").replace(/\\n/g, "\n")}</textarea>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Terms</label>
+            <textarea id="tpl-terms-en" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;line-height:1.6;resize:vertical;min-height:260px;font-family:inherit">${(tpl.terms_text_en || "").replace(/\\n/g, "\n")}</textarea>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Note</label>
+            <textarea id="tpl-note-en" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;line-height:1.6;resize:vertical;min-height:80px;font-family:inherit">${(tpl.note_text_en || "").replace(/\\n/g, "\n")}</textarea>
+          </div>
+        </div>
+      </div>
+      <div style="padding:14px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:#fff">
+        <button onclick="this.closest('[style*=fixed]').remove()" style="padding:8px 16px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;color:#374151">取消</button>
+        <button id="save-tpl-btn" style="padding:8px 20px;border:none;border-radius:6px;background:#111;color:#fff;cursor:pointer;font-size:13px;font-weight:500">保存模板</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+    modal.querySelector("#save-tpl-btn").addEventListener("click", async () => {
+      const btn = modal.querySelector("#save-tpl-btn");
+      btn.textContent = "保存中..."; btn.disabled = true;
+      const payload = {
+        intro_text: modal.querySelector("#tpl-intro-zh").value,
+        terms_text: modal.querySelector("#tpl-terms-zh").value,
+        note_text: modal.querySelector("#tpl-note-zh").value,
+        intro_text_en: modal.querySelector("#tpl-intro-en").value,
+        terms_text_en: modal.querySelector("#tpl-terms-en").value,
+        note_text_en: modal.querySelector("#tpl-note-en").value,
+      };
+      try {
+        await api(`/api/document-templates/${tpl.id}`, { method: "PUT", body: JSON.stringify(payload) });
+        btn.textContent = "✓ 已保存";
+        btn.style.background = "#22c55e";
+        setTimeout(() => modal.remove(), 800);
+      } catch(e) {
+        btn.textContent = "保存失败"; btn.disabled = false;
+      }
+    });
+  });
+  // 点击遮罩关闭弹窗
+  const crudLayout = q("#crud-layout");
+  if (crudLayout) {
+    crudLayout.addEventListener("click", (e) => {
+      if (e.target === crudLayout || e.target.classList.contains("crud-layout")) {
+        const saveBtn = q("#save-btn");
+        const resetBtn = q("#reset-btn");
+        if (saveBtn) saveBtn.style.display = "";
+        if (resetBtn) resetBtn.style.display = "";
+        state.editId = null;
+        if (module === "contracts") state.editingMilestoneId = null;
+        renderForm(module);
+        closeCrudFormPanel(module);
+      }
+    });
+  }
   q("#form-close-btn")?.addEventListener("click", () => {
+    const saveBtn = q("#save-btn");
+    const resetBtn = q("#reset-btn");
+    if (saveBtn) saveBtn.style.display = "";
+    if (resetBtn) resetBtn.style.display = "";
     state.editId = null;
     if (module === "contracts") state.editingMilestoneId = null;
     if (module === "projects") {
@@ -8544,6 +9021,10 @@ async function renderCrud(module) {
     }
     if (act === "edit") {
       await openRowForEditing(id);
+      return;
+    }
+    if (act === "contract-detail") {
+      await openContractDetail(Number(id));
       return;
     }
     if (act === "mark-sent" && module === "change_orders") {

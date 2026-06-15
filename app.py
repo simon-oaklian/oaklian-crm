@@ -4285,6 +4285,18 @@ class CRMHandler(BaseHTTPRequestHandler):
                 r["change_orders_affect_payment_plan_count"] = int(summary.get("impact_payment_plan_count") or 0)
                 r["approved_commissionable_change_amount"] = float(summary.get("approved_commissionable_change_amount") or 0)
                 r["approved_non_commissionable_change_amount"] = float(summary.get("approved_non_commissionable_change_amount") or 0)
+            customer_ids = sorted({int(r["customer_id"]) for r in rows if r.get("customer_id") not in (None, "")})
+            customer_map = {}
+            if customer_ids:
+                ph = ",".join(["?"] * len(customer_ids))
+                cur.execute(f"SELECT id,name,phone,email FROM customers WHERE id IN ({ph})", tuple(customer_ids))
+                customer_map = {c["id"]: row_to_dict(c) for c in cur.fetchall()}
+            for r in rows:
+                customer = customer_map.get(r.get("customer_id"))
+                if not r.get("customer_name"):
+                    r["customer_name"] = (customer or {}).get("name")
+                r["customer_phone"] = r.get("customer_phone") or (customer or {}).get("phone")
+                r["customer_email"] = (customer or {}).get("email")
             return rows
 
         if table == "vendors":
@@ -4583,6 +4595,8 @@ class CRMHandler(BaseHTTPRequestHandler):
             ),
         )
         contract_id = cur.lastrowid
+        # 注入合同模板条款
+        self._inject_contract_template(cur, contract_id, estimate, address, title)
         self._copy_estimate_payment_milestones_to_contract(cur, estimate_id, contract_id)
         cur.execute("UPDATE estimates SET contract_id=? WHERE id=?", (contract_id, estimate_id))
         if project_id:
@@ -4598,6 +4612,138 @@ class CRMHandler(BaseHTTPRequestHandler):
         self._enrich_resource_rows(cur, "contracts", [row])
         conn.close()
         return self._json_response({"created": True, "contract": row}, 201)
+
+    def _contract_apply_template(self, path, user):
+        role_key = normalize_key(user.get("role") or "")
+        if role_key not in {"owner", "manager"}:
+            return self._json_response({"error": "Forbidden"}, 403)
+        parts = [p for p in path.split("/") if p]
+        try:
+            contract_id = int(parts[2])
+        except (IndexError, ValueError):
+            return self._json_response({"error": "Invalid id"}, 400)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT ct.*, c.name AS customer_name, c.phone AS customer_phone,
+                   c.email AS customer_email, c.primary_address AS customer_address
+            FROM contracts ct
+            LEFT JOIN customers c ON c.id = ct.customer_id
+            WHERE ct.id=?
+        """, (contract_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return self._json_response({"error": "Contract not found"}, 404)
+        contract = row_to_dict(row)
+        payload = self._read_json_body() or {}
+        lang = str(payload.get("lang") or "zh").lower()
+        resolved_project_type = self._resolve_record_project_type(
+            cur,
+            record_project_type=contract.get("project_type"),
+            project_id=contract.get("project_id"),
+            customer_id=contract.get("customer_id"),
+            estimate_id=contract.get("estimate_id"),
+        )
+        tpl = self._resolve_document_template(cur, "contract", resolved_project_type) or {}
+        if lang == "en":
+            terms = str(tpl.get("terms_text_en") or tpl.get("terms_text") or "").strip()
+            intro = str(tpl.get("intro_text_en") or tpl.get("intro_text") or "").strip()
+        else:
+            terms = str(tpl.get("terms_text") or "").strip()
+            intro = str(tpl.get("intro_text") or "").strip()
+        def money(v):
+            try:
+                return f"${float(v or 0):,.2f}"
+            except (TypeError, ValueError):
+                return "$0.00"
+        variables = {
+            "{{客户姓名}}": str(contract.get("customer_name") or ""),
+            "{{customer_name}}": str(contract.get("customer_name") or ""),
+            "{{联系电话}}": str(contract.get("customer_phone") or ""),
+            "{{phone}}": str(contract.get("customer_phone") or ""),
+            "{{项目地址}}": str(contract.get("address") or ""),
+            "{{address}}": str(contract.get("address") or ""),
+            "{{项目名称}}": str(contract.get("title") or ""),
+            "{{project_name}}": str(contract.get("title") or ""),
+            "{{合同总额}}": money(contract.get("total_amount")),
+            "{{total_amount}}": money(contract.get("total_amount")),
+            "{{合同编号}}": str(contract.get("contract_no") or ""),
+            "{{contract_no}}": str(contract.get("contract_no") or ""),
+            "{{预计开工日}}": "",
+            "{{start_date}}": "",
+        }
+        full_text = (intro + "\n\n" + terms).strip() if intro else terms
+        for var, val in variables.items():
+            full_text = full_text.replace(var, val)
+        ts = now_ts()
+        cur.execute(
+            "UPDATE contracts SET custom_contract_text=?, custom_contract_enabled=1, updated_at=? WHERE id=?",
+            (full_text, ts, contract_id)
+        )
+        cur.execute(
+            "INSERT INTO contract_change_log (contract_id,changed_by,change_type,field_name,old_value,new_value,created_at) VALUES (?,?,?,?,?,?,?)",
+            (contract_id, user.get("id"), "apply_template", "custom_contract_text",
+             str(contract.get("custom_contract_text") or "")[:200], full_text[:200], ts)
+        )
+        conn.commit()
+        conn.close()
+        return self._json_response({"ok": True, "text": full_text})
+
+    def _inject_contract_template(self, cur, contract_id, estimate, address, title):
+        """从模板注入条款并替换变量，生成合同时调用一次"""
+        try:
+            # 判断语言：客户有 email 且非中文名时用英文，否则用中文
+            lang = "zh"
+            customer_name = str(estimate.get("customer_name") or "").strip()
+            customer_phone = str(estimate.get("customer_phone") or "").strip()
+            # 读取合同模板
+            resolved_project_type = self._resolve_record_project_type(
+                cur,
+                record_project_type=None,
+                project_id=estimate.get("project_id"),
+                customer_id=estimate.get("customer_id"),
+                estimate_id=estimate.get("id"),
+            )
+            tpl = self._resolve_document_template(cur, "contract", resolved_project_type) or {}
+            # 根据语言选择字段
+            if lang == "en":
+                terms = str(tpl.get("terms_text_en") or tpl.get("terms_text") or "").strip()
+                intro = str(tpl.get("intro_text_en") or tpl.get("intro_text") or "").strip()
+            else:
+                terms = str(tpl.get("terms_text") or "").strip()
+                intro = str(tpl.get("intro_text") or "").strip()
+            # 变量替换
+            def money(v):
+                try:
+                    return f"${float(v or 0):,.2f}"
+                except (TypeError, ValueError):
+                    return "$0.00"
+            variables = {
+                "{{客户姓名}}": customer_name,
+                "{{customer_name}}": customer_name,
+                "{{联系电话}}": customer_phone,
+                "{{phone}}": customer_phone,
+                "{{项目地址}}": str(address or "").strip(),
+                "{{address}}": str(address or "").strip(),
+                "{{项目名称}}": str(title or "").strip(),
+                "{{project_name}}": str(title or "").strip(),
+                "{{合同总额}}": money(estimate.get("total_amount")),
+                "{{total_amount}}": money(estimate.get("total_amount")),
+                "{{预计开工日}}": "",
+                "{{start_date}}": "",
+            }
+            full_text = (intro + "\n\n" + terms).strip() if intro else terms
+
+            for var, val in variables.items():
+                full_text = full_text.replace(var, val)
+            if full_text:
+                cur.execute(
+                    "UPDATE contracts SET custom_contract_text=?, custom_contract_enabled=1 WHERE id=?",
+                    (full_text, contract_id)
+                )
+        except Exception as e:
+            pass  # 模板注入失败不影响合同生成
 
     def _copy_estimate_payment_milestones_to_contract(self, cur, estimate_id, contract_id, replace=False):
         if replace:
@@ -4865,6 +5011,8 @@ class CRMHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/quote/"):
             return self._public_quote_page(path)
+        if path.startswith("/sign/"):
+            return self._public_contract_sign_page(path)
         if path == "/":
             return self._serve_static_file("index.html", STATIC_DIR)
         if path == "/favicon.ico":
@@ -5006,6 +5154,8 @@ class CRMHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path.startswith("/api/public/quotes/") and (path.endswith("/confirm") or path.endswith("/reject")):
             return self._public_quote_action(path)
+        if path.startswith("/api/public/contracts/") and path.endswith("/sign"):
+            return self._public_contract_sign_action(path)
         if path == "/api/auth/login":
             return self._auth_login()
         if path == "/api/auth/logout":
@@ -5136,6 +5286,31 @@ class CRMHandler(BaseHTTPRequestHandler):
             if not user:
                 return
             return self._estimate_mark_status(path, user, "rejected")
+        if path.startswith("/api/contracts/") and path.endswith("/generate-sign-link"):
+            user = self._require_auth()
+            if not user:
+                return
+            return self._contract_generate_sign_link(path, user)
+        if path.startswith("/api/contracts/") and path.endswith("/apply-template"):
+            user = self._require_auth()
+            if not user:
+                return
+            return self._contract_apply_template(path, user)
+        if path.startswith("/api/contracts/") and path.endswith("/change-log"):
+            user = self._require_auth()
+            if not user:
+                return
+            parts = [p for p in path.split("/") if p]
+            try:
+                cid = int(parts[2])
+            except (IndexError, ValueError):
+                return self._json_response({"error": "Invalid id"}, 400)
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute("SELECT cl.*, u.username FROM contract_change_log cl LEFT JOIN users u ON u.id=cl.changed_by WHERE cl.contract_id=? ORDER BY cl.created_at DESC LIMIT 50", (cid,))
+            rows = [row_to_dict(r) for r in cur.fetchall()]
+            conn.close()
+            return self._json_response({"items": rows})
         if path.startswith("/api/contracts/") and path.endswith("/mark-sent"):
             user = self._require_auth()
             if not user:
@@ -6851,6 +7026,13 @@ class CRMHandler(BaseHTTPRequestHandler):
         item["amount_due"] = self._milestone_amount(contract_total, item.get("amount_type"), item.get("amount_value"))
         item["state"] = milestone_state_key(item)
         item["trigger_reason"] = self._milestone_trigger_reason(item)
+        raw_name = str(item.get("name") or "").strip()
+        if not raw_name or raw_name in {"新节点", "节点", ""}:
+            stage = str(item.get("trigger_stage") or "").strip()
+            if stage:
+                item["name"] = stage
+            else:
+                item["name"] = f"付款节点"
         return item
 
     def _contract_payment_milestones_get(self, contract_id, user):
@@ -10716,6 +10898,358 @@ document.getElementById('confirm-btn')?.addEventListener('click', () => send('co
         conn.close()
         return self._json_response({"ok": True, "status": target})
 
+
+    def _contract_sign_url(self, token):
+        base = (BASE_URL or "").strip().rstrip("/")
+        if not base or base.startswith("http://0.0.0.0"):
+            base = ""
+        return f"{base}/sign/{token}" if base else f"/sign/{token}"
+
+    def _contract_generate_sign_link(self, path, user):
+        role_key = normalize_key(user.get("role") or "")
+        if role_key not in {"owner", "manager"}:
+            return self._json_response({"error": "Forbidden"}, 403)
+        parts = [p for p in path.split("/") if p]
+        try:
+            contract_id = int(parts[2])
+        except (IndexError, ValueError):
+            return self._json_response({"error": "Invalid id"}, 400)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM contracts WHERE id=?", (contract_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return self._json_response({"error": "Contract not found"}, 404)
+        contract = row_to_dict(row)
+        token = contract.get("sign_token") or secrets.token_urlsafe(32)
+        expires_at = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+        ts = now_ts()
+        cur.execute(
+            "UPDATE contracts SET sign_token=?, sign_token_expires_at=?, sign_status='sent', updated_at=? WHERE id=?",
+            (token, expires_at, ts, contract_id),
+        )
+        conn.commit()
+        conn.close()
+        sign_url = self._contract_sign_url(token)
+        return self._json_response({"ok": True, "sign_url": sign_url, "token": token, "expires_at": expires_at})
+
+    def _public_contract_sign_page(self, path):
+        parts = [p for p in path.split("/") if p]
+        if len(parts) != 2 or parts[0] != "sign":
+            return self._json_response({"error": "Not found"}, 404)
+        token = parts[1]
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT ct.*, c.name AS customer_name, c.phone AS customer_phone,
+                   c.email AS customer_email, c.primary_address AS customer_address
+            FROM contracts ct
+            LEFT JOIN customers c ON c.id = ct.customer_id
+            WHERE ct.sign_token=?
+            """,
+            (token,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return self._html_response("<h1>Link not found or expired.</h1>", 404)
+        contract = row_to_dict(row)
+        # check expiry
+        expires = contract.get("sign_token_expires_at") or ""
+        if expires and expires < now_ts():
+            conn.close()
+            return self._html_response("<h1>This signing link has expired.</h1>", 410)
+        # get payment milestones
+        cur.execute(
+            "SELECT * FROM contract_payment_milestones WHERE contract_id=? ORDER BY id ASC",
+            (contract["id"],),
+        )
+        milestones = [row_to_dict(r) for r in cur.fetchall()]
+        brand = self._read_company_settings(cur)
+        print_cfg = self._print_settings(cur)
+        conn.close()
+        company_name = (print_cfg.get("company_name") or brand.get("company_name") or "Oaklian Remodeling").strip()
+        logo_url = (brand.get("logo_horizontal_url") or "/assets/images/logo-oaklian-dark.png").strip()
+        already_signed = contract.get("sign_status") in {"signed"}
+        customer_signed = bool(contract.get("customer_signature_image"))
+
+        def money(v):
+            try:
+                return f"${float(v or 0):,.2f}"
+            except (TypeError, ValueError):
+                return "$0.00"
+        def esc(v):
+            return html_escape(str(v or ""))
+
+        milestone_rows = "".join(
+            f"<tr><td>{esc(m.get('name'))}</td>"
+            f"<td>{esc(m.get('trigger_stage') or m.get('trigger_type') or '')}</td>"
+            f"<td class='num'>{money(self._milestone_amount(contract.get('total_amount') or 0, m.get('amount_type','percent'), m.get('amount_value',0)))}</td></tr>"
+            for m in milestones
+        ) or "<tr><td colspan='3'>-</td></tr>"
+
+        contract_no = esc(contract.get("contract_no") or f"#{contract['id']}")
+        customer_name = esc(contract.get("customer_name") or "")
+        customer_phone = esc(contract.get("customer_phone") or "")
+        customer_email = esc(contract.get("customer_email") or "")
+        project_address = esc(contract.get("address") or contract.get("customer_address") or "")
+        total = money(contract.get("total_amount"))
+        custom_text = str(contract.get("custom_contract_text") or "").strip()
+        terms_html = "".join(
+            f"<p>{esc(chunk).replace(chr(10),'<br>')}</p>"
+            for chunk in re.split(r"\n\s*\n", custom_text) if chunk.strip()
+        ) if custom_text else "<p>Please review the contract terms as discussed and agreed upon with our team.</p>"
+
+        if already_signed:
+            action_html = "<div class='notice-ok'>✓ This contract has been signed. Thank you!</div>"
+        elif customer_signed:
+            action_html = "<div class='notice-ok'>✓ Your signature has been received. Awaiting company countersignature.</div>"
+        else:
+            action_html = f"""
+<div class='sign-box' id='sign-box'>
+  <h2>Sign Contract</h2>
+  <p class='sign-desc'>By signing below, you confirm that you have read and agree to all terms in this contract.</p>
+  <div class='sig-wrap'>
+    <div class='sig-label'>Your Signature</div>
+    <canvas id='sig-canvas' width='700' height='160'></canvas>
+    <div class='sig-actions'>
+      <button class='btn-secondary' onclick='clearSig()'>Clear</button>
+      <span id='sig-hint' class='hint'>Draw your signature above</span>
+    </div>
+  </div>
+  <div class='agree-row'>
+    <input type='checkbox' id='agree-chk'>
+    <label for='agree-chk'>I have read and agree to all terms of this contract (Contract {contract_no})</label>
+  </div>
+  <div class='agree-row'>
+    <input type='checkbox' id='legal-chk'>
+    <label for='legal-chk'>I understand this electronic signature is legally binding</label>
+  </div>
+  <button class='btn-primary' id='submit-btn' disabled onclick='submitSign()'>Confirm &amp; Sign Contract</button>
+</div>"""
+
+        html = f"""<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contract {contract_no} - Sign</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#e8ebf0;font-family:Arial,'Microsoft YaHei',sans-serif;color:#1d2433}}
+.page{{width:min(860px,calc(100vw - 24px));margin:24px auto;background:#fff;padding:36px;box-shadow:0 2px 12px rgba(0,0,0,.15)}}
+.top{{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #555;padding-bottom:16px;margin-bottom:24px;gap:16px;flex-wrap:wrap}}
+.logo{{height:48px;object-fit:contain}}
+.co-name{{font-size:20px;font-weight:700}}
+.doc-ref{{text-align:right}}
+.doc-ref h2{{font-size:18px;font-weight:700}}
+.doc-ref .sub{{color:#667085;font-size:13px}}
+h3{{font-size:15px;font-weight:700;margin:20px 0 8px;border-left:4px solid #555;padding-left:10px}}
+.info-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px 32px;font-size:14px;margin-bottom:16px}}
+.info-grid .label{{color:#667085;font-size:12px}}
+.info-grid .val{{font-weight:500}}
+table{{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px}}
+th,td{{border-bottom:1px solid #e0e4ea;padding:8px;text-align:left}}
+th{{background:#f3f5f8;font-weight:600}}
+.num{{text-align:right}}
+.terms{{font-size:13px;line-height:1.75;color:#374151;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:16px;margin-bottom:20px}}
+.terms p{{margin-bottom:10px}}
+.sign-box{{border:1px solid #d0d7e2;border-radius:6px;padding:20px;margin-top:20px}}
+.sign-box h2{{font-size:16px;font-weight:700;margin-bottom:6px}}
+.sign-desc{{font-size:13px;color:#667085;margin-bottom:16px}}
+.sig-wrap{{border:1px solid #d0d7e2;border-radius:4px;overflow:hidden;margin-bottom:12px}}
+.sig-label{{background:#f3f5f8;padding:6px 12px;font-size:12px;color:#667085;border-bottom:1px solid #d0d7e2}}
+canvas#sig-canvas{{display:block;width:100%;height:160px;background:#fff;cursor:crosshair;touch-action:none}}
+canvas#sig-canvas.has-sig{{border-top:2px solid #22c55e}}
+.sig-actions{{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f9fafb;border-top:1px solid #e5e7eb}}
+.hint{{font-size:12px;color:#9ca3af;flex:1}}
+.agree-row{{display:flex;align-items:flex-start;gap:10px;font-size:13px;margin-bottom:10px;line-height:1.5}}
+.agree-row input{{margin-top:2px;flex-shrink:0;width:16px;height:16px;cursor:pointer}}
+.btn-primary{{display:block;width:100%;padding:13px;background:#1f2937;color:#fff;border:none;border-radius:4px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px}}
+.btn-primary:disabled{{opacity:.4;cursor:not-allowed}}
+.btn-primary:not(:disabled):hover{{background:#374151}}
+.btn-secondary{{padding:6px 14px;background:#fff;border:1px solid #d0d7e2;border-radius:4px;cursor:pointer;font-size:12px}}
+.btn-secondary:hover{{background:#f3f5f8}}
+.notice-ok{{padding:16px;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#166534;font-weight:600;text-align:center;margin-top:20px}}
+.total-row{{display:flex;justify-content:flex-end;font-size:20px;font-weight:700;margin:8px 0 20px}}
+@media(max-width:600px){{.page{{padding:20px}}.top{{flex-direction:column}}.doc-ref{{text-align:left}}.info-grid{{grid-template-columns:1fr}}}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top">
+    <div>
+      <img class="logo" src="{esc(logo_url)}" alt="logo" onerror="this.style.display='none'">
+      <div class="co-name">{esc(company_name)}</div>
+    </div>
+    <div class="doc-ref">
+      <h2>Service Contract</h2>
+      <div class="sub">Contract No: {contract_no}</div>
+    </div>
+  </div>
+
+  <h3>Customer Information</h3>
+  <div class="info-grid">
+    <div><div class="label">Name</div><div class="val">{customer_name}</div></div>
+    <div><div class="label">Phone</div><div class="val">{customer_phone}</div></div>
+    <div><div class="label">Email</div><div class="val">{customer_email}</div></div>
+    <div><div class="label">Project Address</div><div class="val">{project_address}</div></div>
+  </div>
+
+  <h3>Payment Schedule</h3>
+  <table>
+    <thead><tr><th>Milestone</th><th>Trigger</th><th class="num">Amount</th></tr></thead>
+    <tbody>{milestone_rows}</tbody>
+  </table>
+  <div class="total-row">Total: {total}</div>
+
+  <h3>Contract Terms</h3>
+  <div class="terms">{terms_html}</div>
+
+  {action_html}
+</div>
+
+<script>
+const TOKEN = {json.dumps(token)};
+const canvas = document.getElementById('sig-canvas');
+const ctx = canvas ? canvas.getContext('2d') : null;
+let drawing = false, hasSig = false;
+
+if (ctx) {{
+  ctx.strokeStyle = '#1d2433';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const rect = () => canvas.getBoundingClientRect();
+  const scaleX = () => canvas.width / rect().width;
+  const scaleY = () => canvas.height / rect().height;
+  const pos = e => {{
+    const r = rect(), s = e.touches ? e.touches[0] : e;
+    return {{ x: (s.clientX - r.left) * scaleX(), y: (s.clientY - r.top) * scaleY() }};
+  }};
+  canvas.addEventListener('mousedown', e => {{ drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }});
+  canvas.addEventListener('mousemove', e => {{ if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); markSigned(); }});
+  canvas.addEventListener('mouseup', () => {{ drawing = false; ctx.beginPath(); }});
+  canvas.addEventListener('mouseleave', () => {{ drawing = false; }});
+  canvas.addEventListener('touchstart', e => {{ e.preventDefault(); drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }}, {{passive:false}});
+  canvas.addEventListener('touchmove', e => {{ e.preventDefault(); if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); markSigned(); }}, {{passive:false}});
+  canvas.addEventListener('touchend', () => {{ drawing = false; }});
+}}
+
+function markSigned() {{
+  if (!hasSig) {{ hasSig = true; canvas.classList.add('has-sig'); document.getElementById('sig-hint').textContent = 'Signature recorded'; updateBtn(); }}
+}}
+function clearSig() {{
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  hasSig = false; canvas.classList.remove('has-sig');
+  document.getElementById('sig-hint').textContent = 'Draw your signature above';
+  updateBtn();
+}}
+function updateBtn() {{
+  const agree = document.getElementById('agree-chk')?.checked;
+  const legal = document.getElementById('legal-chk')?.checked;
+  const btn = document.getElementById('submit-btn');
+  if (btn) btn.disabled = !(hasSig && agree && legal);
+}}
+document.getElementById('agree-chk')?.addEventListener('change', updateBtn);
+document.getElementById('legal-chk')?.addEventListener('change', updateBtn);
+
+async function submitSign() {{
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  const sigData = canvas.toDataURL('image/png');
+  const res = await fetch(`/api/public/contracts/${{TOKEN}}/sign`, {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{ signature_image: sigData }})
+  }});
+  const out = await res.json().catch(() => ({{}}));
+  if (!res.ok) {{ alert(out.error || 'Failed to submit. Please try again.'); btn.disabled = false; btn.textContent = 'Confirm & Sign Contract'; return; }}
+  location.reload();
+}}
+</script>
+</body></html>"""
+        return self._html_response(html)
+
+    def _public_contract_sign_action(self, path):
+        parts = [p for p in path.split("/") if p]
+        # /api/public/contracts/{token}/sign
+        if len(parts) != 5 or parts[2] != "contracts" or parts[4] != "sign":
+            return self._json_response({"error": "Not found"}, 404)
+        token = parts[3]
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM contracts WHERE sign_token=?", (token,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return self._json_response({"error": "Contract not found"}, 404)
+        contract = row_to_dict(row)
+        expires = contract.get("sign_token_expires_at") or ""
+        if expires and expires < now_ts():
+            conn.close()
+            return self._json_response({"error": "Signing link has expired"}, 410)
+        if contract.get("customer_signature_image"):
+            conn.close()
+            return self._json_response({"error": "Already signed"}, 400)
+        payload = self._read_json_body() or {}
+        sig_image = str(payload.get("signature_image") or "").strip()
+        if not sig_image or not sig_image.startswith("data:image/"):
+            conn.close()
+            return self._json_response({"error": "Invalid signature"}, 400)
+        ts = now_ts()
+        ip = self.client_address[0] if self.client_address else ""
+        ua = self.headers.get("User-Agent", "")
+        cur.execute(
+            """
+            UPDATE contracts
+            SET customer_signature_image=?, sign_status='customer_signed', updated_at=?,
+                signed_at=COALESCE(signed_at,?), signed_date=COALESCE(signed_date,?)
+            WHERE id=?
+            """,
+            (sig_image, ts, ts, ts[:10], contract["id"]),
+        )
+        cur.execute(
+            """
+            INSERT INTO contract_signatures
+            (contract_id, signer_type, signer_name, signer_email, signature_image, ip_address, user_agent, signed_at, created_at)
+            VALUES (?, 'customer', ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                contract["id"],
+                contract.get("customer_name") or "",
+                contract.get("customer_email") or "",
+                sig_image,
+                ip,
+                ua,
+                ts,
+                ts,
+            ),
+        )
+        # 通知内部人员客户已签署
+        try:
+            conn2 = get_conn()
+            cur2 = conn2.cursor()
+            cur2.execute("SELECT id FROM users WHERE role IN ('owner','manager') LIMIT 5")
+            managers = [r["id"] for r in cur2.fetchall()]
+            customer_name = contract.get("customer_name") or "客户"
+            contract_no = contract.get("contract_no") or f"#{contract['id']}"
+            for uid in managers:
+                cur2.execute(
+                    "INSERT INTO notifications (user_id, type, title, content, related_entity_type, related_entity_id, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+                    (uid, "contract_signed", f"合同已签署：{contract_no}",
+                     f"{customer_name} 已完成电子签署，请内部确认并生成项目。", "contract", contract["id"], ts)
+                )
+            conn2.commit()
+            conn2.close()
+        except Exception:
+            pass
+        conn.commit()
+        conn.close()
+        return self._json_response({"ok": True})
+
     def _handle_contract_pdf(self, path, user, query):
         parts = [p for p in path.split("/") if p]
         if len(parts) != 4 or parts[0] != "api" or parts[1] != "contracts" or parts[3] != "pdf":
@@ -12838,6 +13372,18 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
         if cur.rowcount == 0:
             conn.close()
             return self._json_response({"error": "Record not found"}, 404)
+        if table == "contracts":
+            ts_log = now_ts()
+            tracked = ["custom_contract_text", "total_amount", "title", "address", "customer_id"]
+            for field in tracked:
+                if field in incoming_payload:
+                    old_val = str(existing.get(field) or "") if "existing" in dir() and isinstance(existing, dict) else ""
+                    new_val = str(payload.get(field) or "")
+                    if old_val != new_val:
+                        cur.execute(
+                            "INSERT INTO contract_change_log (contract_id,changed_by,change_type,field_name,old_value,new_value,created_at) VALUES (?,?,?,?,?,?,?)",
+                            (record_id, user.get("id"), "field_update", field, old_val, new_val, ts_log)
+                        )
         if table == "estimates" and reset_confirmed_quote:
             cur.execute(
                 """
