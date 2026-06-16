@@ -1144,6 +1144,7 @@ th {
 .finance-compact-table {
   max-height: 290px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .finance-ops-toolbar {
   margin-bottom: 10px;
@@ -1816,8 +1817,8 @@ button:active:not(:disabled),
     flex: 0 0 auto;
   }
   .crud-layout .crud-toolbar select {
-    flex: 1 1 130px;
-    width: auto;
+    flex: 1 1 0;
+    width: auto !important;
     min-width: 0;
   }
   .crud-layout .table-wrap {
@@ -2563,7 +2564,7 @@ table td:last-child, table th:last-child { white-space: nowrap; min-width: 240px
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: clip;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 68px;
   }
