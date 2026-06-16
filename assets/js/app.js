@@ -3969,8 +3969,26 @@ async function renderContractDetailView(row) {
           <div style="font-size:13px;font-weight:500;color:${row.customer_signature_image ? "#22c55e" : "#9ca3af"}">${row.customer_signature_image ? "✓ 已签署" : "未签署"}</div>
         </div>
       </div>
+      ${signStatus === "signed" ? `
+      <div style="margin:12px 0 0;padding:12px 14px;border:1.5px solid #22c55e;border-radius:8px;background:#f0fdf4">
+        <div style="font-size:11px;font-weight:700;color:#166534;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">合同已签署</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a href="/api/contracts/${row.id}/pdf?lang=${state.locale || 'en'}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:6px 14px;border-radius:6px;border:none;background:#22c55e;color:#fff;text-decoration:none;font-weight:600">📄 下载已签合同 PDF</a>
+          <button id="copy-pdf-link-btn" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #16a34a;background:#fff;color:#16a34a;cursor:pointer">复制 PDF 链接</button>
+        </div>
+        <div style="font-size:11px;color:#4ade80;margin-top:6px">提示：PDF 包含双方签名，可直接发送给客户存档</div>
+      </div>` : ""}
     </div>
   </div>`;
+
+  // 已签合同 PDF 链接复制
+  document.getElementById("copy-pdf-link-btn")?.addEventListener("click", () => {
+    const url = `${window.location.origin}/api/contracts/${row.id}/pdf?lang=${state.locale || "en"}`;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.getElementById("copy-pdf-link-btn");
+      if (btn) { btn.textContent = "✓ 已复制"; setTimeout(() => { if (btn) btn.textContent = "复制 PDF 链接"; }, 2000); }
+    });
+  });
 
   // 内部操作按钮
   document.getElementById("int-send-sign-btn")?.addEventListener("click", async () => {
@@ -10400,6 +10418,69 @@ async function renderApp() {
   return renderCrud(state.module);
 }
 
+function openMySignatureModal() {
+  const existing = state.user?.signature_image || "";
+  const overlay = document.createElement("div");
+  overlay.id = "sig-modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px;width:min(500px,100%);box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">我的电子签名</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:16px">此签名将作为您以公司名义签署合同时的授权签名</div>
+      ${existing ? `<div style="margin-bottom:12px"><div style="font-size:11px;color:#64748b;margin-bottom:4px">当前签名：</div><img src="${existing}" style="max-height:80px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;padding:4px"></div>` : ""}
+      <div style="border:1px solid #d1d5db;border-radius:6px;overflow:hidden;background:#fafafa">
+        <canvas id="my-sig-canvas" width="460" height="140" style="display:block;width:100%;touch-action:none;cursor:crosshair"></canvas>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <button id="my-sig-clear" class="secondary" style="font-size:12px;padding:5px 14px">清除</button>
+        <span id="my-sig-hint" style="font-size:12px;color:#94a3b8;flex:1">在上方画出您的签名</span>
+        <button id="my-sig-cancel" class="secondary" style="font-size:12px;padding:5px 14px">取消</button>
+        <button id="my-sig-save" style="font-size:12px;padding:5px 14px" disabled>保存</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const canvas = document.getElementById("my-sig-canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.strokeStyle = "#1e293b";
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  let drawing = false, hasSig = false;
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return [(t.clientX - r.left) * (canvas.width / r.width), (t.clientY - r.top) * (canvas.height / r.height)];
+  }
+  canvas.addEventListener("mousedown", e => { drawing = true; const [x,y] = getPos(e); ctx.beginPath(); ctx.moveTo(x,y); });
+  canvas.addEventListener("mousemove", e => { if (!drawing) return; const [x,y] = getPos(e); ctx.lineTo(x,y); ctx.stroke(); hasSig = true; document.getElementById("my-sig-save").disabled = false; document.getElementById("my-sig-hint").textContent = ""; });
+  canvas.addEventListener("mouseup", () => { drawing = false; });
+  canvas.addEventListener("touchstart", e => { e.preventDefault(); drawing = true; const [x,y] = getPos(e); ctx.beginPath(); ctx.moveTo(x,y); }, {passive:false});
+  canvas.addEventListener("touchmove", e => { e.preventDefault(); if (!drawing) return; const [x,y] = getPos(e); ctx.lineTo(x,y); ctx.stroke(); hasSig = true; document.getElementById("my-sig-save").disabled = false; document.getElementById("my-sig-hint").textContent = ""; }, {passive:false});
+  canvas.addEventListener("touchend", () => { drawing = false; });
+
+  document.getElementById("my-sig-clear").addEventListener("click", () => { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSig = false; document.getElementById("my-sig-save").disabled = true; document.getElementById("my-sig-hint").textContent = "在上方画出您的签名"; });
+  document.getElementById("my-sig-cancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+  document.getElementById("my-sig-save").addEventListener("click", async () => {
+    if (!hasSig) return;
+    const sigData = canvas.toDataURL("image/png");
+    const btn = document.getElementById("my-sig-save");
+    btn.textContent = "保存中..."; btn.disabled = true;
+    try {
+      await api("/api/auth/me/signature", { method: "POST", body: JSON.stringify({ signature_image: sigData }) });
+      if (state.user) state.user.signature_image = sigData;
+      overlay.remove();
+      alert("签名已保存");
+    } catch(e) {
+      btn.textContent = "保存"; btn.disabled = false;
+      alert("保存失败：" + (e.message || "未知错误"));
+    }
+  });
+}
+
 async function initApp() {
   try {
     state.brand = await api("/api/company/settings");
@@ -10411,6 +10492,8 @@ async function initApp() {
   q("#logout-btn").addEventListener("click", async () => {
     await logoutCurrentUser();
   });
+
+  q("#my-sig-btn")?.addEventListener("click", () => openMySignatureModal());
 
   q("#notification-btn")?.addEventListener("click", async (ev) => {
     ev.stopPropagation();

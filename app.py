@@ -1484,6 +1484,7 @@ def init_db():
     )
     ensure_columns(cur, "contract_payment_milestones", {"node_type": "TEXT", "trigger_progress": "INTEGER", "triggered": "INTEGER DEFAULT 0", "triggered_at": "TEXT", "reminded": "INTEGER DEFAULT 0", "reminded_at": "TEXT", "paid": "INTEGER DEFAULT 0", "paid_at": "TEXT", "note": "TEXT", "updated_at": "TEXT"})
     ensure_columns(cur, "designer_commissions", {"designer_id": "INTEGER", "change_order_amount": "REAL DEFAULT 0", "commission_base": "TEXT DEFAULT 'base_contract_only'", "note": "TEXT", "updated_at": "TEXT"})
+    ensure_columns(cur, "users", {"signature_image": "TEXT", "display_name": "TEXT"})
     ensure_columns(
         cur,
         "document_templates",
@@ -5045,6 +5046,11 @@ class CRMHandler(BaseHTTPRequestHandler):
 
         if path == "/api/auth/me":
             return self._auth_me()
+        if path == "/api/auth/me/signature":
+            user = self._current_user()
+            if not user:
+                return self._json_response({"error": "Unauthorized"}, 401)
+            return self._json_response({"signature_image": user.get("signature_image")})
         if path == "/api/company/settings":
             return self._get_company_settings()
 
@@ -5407,6 +5413,9 @@ class CRMHandler(BaseHTTPRequestHandler):
         if not user:
             return
 
+        if path == "/api/auth/me/signature":
+            return self._save_my_signature(user)
+
         if path == "/api/admin/users":
             if user.get("role") != "owner":
                 return self._json_response({"error": "Owner only"}, 403)
@@ -5613,6 +5622,22 @@ class CRMHandler(BaseHTTPRequestHandler):
             conn.close()
         return self._json_response({"ok": True}, extra_headers={"Set-Cookie": "crm_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"})
 
+    def _save_my_signature(self, user):
+        payload = self._read_json_body()
+        if not payload:
+            return self._json_response({"error": "Invalid JSON"}, 400)
+        sig = str(payload.get("signature_image") or "").strip()
+        if not sig or not sig.startswith("data:image/"):
+            return self._json_response({"error": "Invalid signature_image"}, 400)
+        if len(sig) > 500_000:
+            return self._json_response({"error": "Signature too large"}, 400)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET signature_image=?, updated_at=? WHERE id=?", (sig, now_ts(), user["id"]))
+        conn.commit()
+        conn.close()
+        return self._json_response({"ok": True})
+
     def _auth_me(self):
         user = self._current_user()
         if not user:
@@ -5632,6 +5657,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                     "role": user["role"],
                     "language": user.get("language") or DEFAULT_LANGUAGE,
                     "modules": user.get("modules") or [],
+                    "signature_image": user.get("signature_image"),
                 },
                 "brand": brand,
             }
@@ -11630,7 +11656,24 @@ th{{background:{brand.get('light_bg', '#E2E8F0')}}}
                     section_rows = [{"name": txt["details"], "lines": legacy_items}]
             except (json.JSONDecodeError, AttributeError):
                 section_rows = []
+        signer_sig_image = ""
+        signer_name = ""
+        if contract.get("signed_by"):
+            cur.execute("SELECT username, signature_image FROM users WHERE id=?", (contract["signed_by"],))
+            signer_row = cur.fetchone()
+            if signer_row:
+                signer_sig_image = signer_row["signature_image"] or ""
+                signer_name = signer_row["username"] or ""
         conn.close()
+
+        sign_status_key = self._contract_sign_status_key(contract.get("sign_status") or contract.get("signed_status"))
+        cust_sig_img = contract.get("customer_signature_image") or ""
+        customer_sig_html = f'<img src="{html_escape(cust_sig_img)}" style="max-height:70px;display:block;margin:4px 0">' if cust_sig_img else '<div style="min-height:50px"></div>'
+        customer_sig_date = str(contract.get("signed_at") or "")[:10] if cust_sig_img else ""
+        customer_sig_name = html_escape(contract.get("customer_name") or "")
+        company_sig_html = f'<img src="{html_escape(signer_sig_image)}" style="max-height:70px;display:block;margin:4px 0">' if signer_sig_image else '<div style="min-height:50px"></div>'
+        company_sig_date = str(contract.get("signed_at") or "")[:10] if sign_status_key == "signed" else ""
+        company_sig_name = html_escape(signer_name or company_name)
 
         def num_value(value):
             try:
@@ -11872,8 +11915,18 @@ th{{background:#f1f5f9;color:#111827;font-weight:800}}
   <section class="signature-section">
     <h3>{txt['signature']}</h3>
     <div class="sign-grid">
-      <div class="sign-box">{txt['customer_signature']}:</div>
-      <div class="sign-box">{txt['company_signature']}:</div>
+      <div class="sign-box">
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px">{txt['customer_signature']}:</div>
+        {customer_sig_html}
+        <div style="font-size:11px;color:#374151;margin-top:4px">{customer_sig_name}</div>
+        <div style="font-size:11px;color:#64748b">{customer_sig_date}</div>
+      </div>
+      <div class="sign-box">
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px">{txt['company_signature']}:</div>
+        {company_sig_html}
+        <div style="font-size:11px;color:#374151;margin-top:4px">{company_sig_name}</div>
+        <div style="font-size:11px;color:#64748b">{company_sig_date}</div>
+      </div>
     </div>
     {signature_hint_html}
   </section>
