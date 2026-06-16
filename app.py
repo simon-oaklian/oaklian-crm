@@ -2528,12 +2528,20 @@ class CRMHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return None
 
+    def _serve_404_page(self):
+        page_404 = STATIC_DIR / "404.html"
+        if page_404.exists():
+            self._set_headers(404, "text/html; charset=utf-8")
+            self.wfile.write(page_404.read_bytes())
+        else:
+            self._set_headers(404, "text/html; charset=utf-8")
+            self.wfile.write(b"<html><body><h1>404 Not Found</h1></body></html>")
+
     def _serve_static_file(self, rel_path, root_dir):
         path = (root_dir / rel_path).resolve()
         root = root_dir.resolve()
         if not str(path).startswith(str(root)) or not path.exists() or not path.is_file():
-            self._set_headers(404, "text/plain; charset=utf-8")
-            self.wfile.write(b"Not Found")
+            self._serve_404_page()
             return
 
         guessed = mimetypes.guess_type(path.name)[0]
@@ -5030,6 +5038,12 @@ class CRMHandler(BaseHTTPRequestHandler):
             return self._serve_static_file(unquote(path[len("/static/") :]), STATIC_DIR)
         if path.startswith("/uploads/"):
             return self._serve_static_file(unquote(path[len("/uploads/") :]), UPLOADS_DIR)
+        if path == "/404.html":
+            return self._serve_404_page()
+
+        # Non-API frontend routes: serve SPA so client-side router handles them
+        if not path.startswith("/api/") and not path.startswith("/print/") and not path.startswith("/data/"):
+            return self._serve_static_file("index.html", STATIC_DIR)
 
         if path.startswith("/print/"):
             user = self._require_auth()
