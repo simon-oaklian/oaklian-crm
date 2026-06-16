@@ -1993,6 +1993,10 @@ button:active:not(:disabled),
     flex: 0 0 auto;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
+  /* 非首页完全隐藏 sidebar，把空间留给内容 */
+  body:not([data-module="dashboard"]) .sidebar {
+    display: none;
+  }
   .sidebar .menu,
   body[data-module="dashboard"] .sidebar .menu {
     display: none;
@@ -2027,10 +2031,11 @@ button:active:not(:disabled),
   }
   .content {
     flex: 1 1 auto;
-    height: auto;
     min-height: 0;
     overflow: hidden;
     padding: 10px;
+    display: flex;
+    flex-direction: column;
   }
   .mobile-back-btn {
     display: inline-flex;
@@ -2046,6 +2051,7 @@ button:active:not(:disabled),
     display: none;
   }
   .topbar {
+    flex: 0 0 auto;
     display: grid;
     grid-template-columns: 1fr;
     gap: 8px;
@@ -2059,8 +2065,11 @@ button:active:not(:disabled),
   .topbar p {
     display: none;
   }
+  #lang-select {
+    display: none;
+  }
   .top-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: 1fr auto auto;
     gap: 6px;
   }
   .top-actions button,
@@ -2071,6 +2080,12 @@ button:active:not(:disabled),
     border-radius: 8px;
     font-size: 12px;
   }
+  .user-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 90px;
+  }
   .notif-badge {
     min-width: 17px;
     height: 17px;
@@ -2078,24 +2093,36 @@ button:active:not(:disabled),
     line-height: 17px;
   }
   #main {
-    height: calc(100dvh - 138px - 60px);
+    flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
   }
   body[data-module="dashboard"] #main {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: 68px;
   }
   .panel {
     border-radius: 10px;
     padding: 10px;
   }
+  /* 直接在 #main 内的面板撑满高度，让内层可以正确滚动 */
+  #main > .panel,
+  #main > section.panel {
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
   .crud-layout,
   .grid-main {
+    flex: 1 1 auto;
     height: 100%;
     min-height: 0;
   }
   .crud-list-panel {
+    flex: 1 1 auto;
     height: 100%;
     min-height: 0;
     display: flex;
@@ -2126,6 +2153,7 @@ button:active:not(:disabled),
     gap: 8px;
     margin-top: 8px;
     padding-right: 2px;
+    padding-bottom: 68px;
   }
   .crud-layout .table-wrap,
   .customer-modal-crud .table-wrap {
@@ -2471,5 +2499,48 @@ table td:last-child, table th:last-child { white-space: nowrap; min-width: 240px
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 72px;
+  }
+}
+
+/* ===== 移动端 Finance 修复 ===== */
+@media (max-width: 768px) {
+  /* Finance Tab 横向滑动，不换行 */
+  .finance-subnav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 8px;
+  }
+  .finance-subnav::-webkit-scrollbar { display: none; }
+  .finance-subnav button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  /* Finance 内容区撑满，可滚动 */
+  .finance-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .finance-subnav {
+    flex: 0 0 auto;
+  }
+  #finance-tab-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 68px;
+  }
+
+  /* 非首页：topbar 页面标题行缩小，给内容更多空间 */
+  body:not([data-module="dashboard"]) .topbar h2 {
+    font-size: 20px;
+  }
+  body:not([data-module="dashboard"]) .topbar {
+    margin-bottom: 6px;
+    padding-bottom: 6px;
   }
 }
