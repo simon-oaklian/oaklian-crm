@@ -3646,14 +3646,16 @@ function updateMobileBackButton() {
     btn = document.createElement("button");
     btn.id = "mobile-back-btn";
     btn.type = "button";
-    btn.className = "mobile-back-btn secondary hidden";
+    btn.className = "mobile-back-btn hidden";
     btn.addEventListener("click", async () => {
       closeNotificationPopover();
       state.editId = null;
       state.module = "dashboard";
       await renderApp();
     });
-    topbar.parentNode.insertBefore(btn, topbar);
+    const firstDiv = topbar.querySelector("div");
+    if (firstDiv) firstDiv.prepend(btn);
+    else topbar.prepend(btn);
   }
   btn.textContent = "‹ " + t("dashboard");
   btn.classList.toggle("hidden", state.module === "dashboard");
