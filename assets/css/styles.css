@@ -2535,6 +2535,20 @@ table td:last-child, table th:last-child { white-space: nowrap; min-width: 240px
     padding-bottom: 68px;
   }
 
+  /* Finance 表格横向滚动 */
+  #finance-tab-content .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #finance-tab-content .table-wrap table {
+    width: max-content;
+    min-width: 100%;
+  }
+  #finance-tab-content th,
+  #finance-tab-content td {
+    white-space: nowrap;
+  }
+
   /* 非首页：topbar 页面标题行缩小，给内容更多空间 */
   body:not([data-module="dashboard"]) .topbar h2 {
     font-size: 20px;

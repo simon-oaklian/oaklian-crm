@@ -10505,9 +10505,10 @@ function renderMobileMoreSheet() {
   var items = others.map(function(m) {
     var icon = MOBILE_MORE_ICONS[m] || "📌";
     var cls = state.module === m ? " active" : "";
+    var labelKey = NAV_PARENT_GROUPS[m] ? navParentLabelKey(m) : m;
     return '<button class="mobile-more-item' + cls + '" data-m="' + m + '" type="button">'
       + '<span class="more-item-icon">' + icon + '</span>'
-      + '<span class="more-item-label">' + t(m) + '</span></button>';
+      + '<span class="more-item-label">' + t(labelKey) + '</span></button>';
   }).join("");
 
   sheet.innerHTML = '<div class="mobile-more-header"><span>' + allLbl + '</span>'
