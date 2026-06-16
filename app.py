@@ -5017,6 +5017,10 @@ class CRMHandler(BaseHTTPRequestHandler):
             return self._serve_static_file("index.html", STATIC_DIR)
         if path == "/favicon.ico":
             return self._serve_brand_favicon()
+        if path == "/manifest.json":
+            return self._serve_static_file("manifest.json", STATIC_DIR)
+        if path == "/sw.js":
+            return self._serve_static_file("sw.js", STATIC_DIR)
         if path.startswith("/assets/"):
             return self._serve_static_file(unquote(path[len("/assets/") :]), ASSETS_DIR)
         if path.startswith("/static/"):

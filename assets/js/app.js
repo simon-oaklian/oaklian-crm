@@ -10328,6 +10328,7 @@ async function renderApp() {
   document.body.dataset.module = state.module || "";
   setPageHeader();
   renderMenu();
+  renderMobileTabbar();
   q("#lang-select").value = state.locale;
   await refreshNotificationUnreadCount();
 
@@ -10409,3 +10410,117 @@ async function initApp() {
 initApp().catch((e) => {
   alert(e.message);
 });
+
+// ===== PWA Mobile Tab Bar =====
+const MOBILE_PRIMARY_TABS = [
+  { key: "dashboard", icon: "🏠", zh: "首页",  en: "Home",     es: "Inicio" },
+  { key: "customers", icon: "👥", zh: "客户",  en: "Clients",  es: "Clientes" },
+  { key: "projects",  icon: "🏗️", zh: "项目",  en: "Projects", es: "Proyectos" },
+  { key: "finance",   icon: "💰", zh: "财务",  en: "Finance",  es: "Finanzas" },
+];
+
+const MOBILE_MORE_ICONS = {
+  estimates: "📋", contracts: "📝", change_orders: "🔄",
+  documents: "📁", designers_group: "✏️", designers: "✏️",
+  designer_applications: "📨", designer_assignments: "🎯",
+  stage_templates: "📐", system_settings: "⚙️",
+  settings: "👤", notifications: "🔔",
+};
+
+function isMobileView() { return window.innerWidth <= 768; }
+
+function renderMobileTabbar() {
+  const bar = document.getElementById("mobile-tabbar");
+  if (!bar) return;
+  if (!isMobileView() || !state.user) { bar.classList.add("hidden"); return; }
+  bar.classList.remove("hidden");
+
+  const mods = availableModules();
+  const lang = state.locale || "zh";
+  const primaryKeys = MOBILE_PRIMARY_TABS.map(function(t) { return t.key; });
+  const hasOther = mods.some(function(m) { return !primaryKeys.includes(m); });
+  const moreActive = !primaryKeys.includes(state.module);
+
+  var html = MOBILE_PRIMARY_TABS
+    .filter(function(tab) { return mods.includes(tab.key); })
+    .map(function(tab) {
+      var label = tab[lang] || tab.zh;
+      var cls = state.module === tab.key ? " active" : "";
+      return '<button class="mobile-tabbar-btn' + cls + '" data-tab="' + tab.key + '" type="button">'
+        + '<span class="tab-icon">' + tab.icon + '</span>'
+        + '<span>' + label + '</span></button>';
+    }).join("");
+
+  if (hasOther) {
+    var moreLbl = lang === "en" ? "More" : lang === "es" ? "Más" : "更多";
+    html += '<button class="mobile-tabbar-btn' + (moreActive ? " active" : "") + '" id="mobile-more-btn" type="button">'
+      + '<span class="tab-icon">☰</span><span>' + moreLbl + '</span></button>';
+  }
+
+  bar.innerHTML = html;
+
+  bar.querySelectorAll(".mobile-tabbar-btn[data-tab]").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      state.module = btn.dataset.tab;
+      state.editId = null;
+      renderApp();
+    });
+  });
+
+  var moreBtn = document.getElementById("mobile-more-btn");
+  if (moreBtn) moreBtn.addEventListener("click", openMobileMoreSheet);
+}
+
+function openMobileMoreSheet() {
+  var sheet = document.getElementById("mobile-more-sheet");
+  var overlay = document.getElementById("mobile-more-overlay");
+  if (!sheet) return;
+  renderMobileMoreSheet();
+  sheet.classList.remove("hidden");
+  if (overlay) overlay.classList.remove("hidden");
+  requestAnimationFrame(function() { sheet.classList.add("open"); });
+  if (overlay) overlay.addEventListener("click", closeMobileMoreSheet, { once: true });
+}
+
+function closeMobileMoreSheet() {
+  var sheet = document.getElementById("mobile-more-sheet");
+  var overlay = document.getElementById("mobile-more-overlay");
+  if (sheet) {
+    sheet.classList.remove("open");
+    setTimeout(function() { sheet.classList.add("hidden"); }, 230);
+  }
+  if (overlay) overlay.classList.add("hidden");
+}
+
+function renderMobileMoreSheet() {
+  var sheet = document.getElementById("mobile-more-sheet");
+  if (!sheet) return;
+  var mods = availableModules();
+  var lang = state.locale || "zh";
+  var primaryKeys = MOBILE_PRIMARY_TABS.map(function(tab) { return tab.key; });
+  var others = mods.filter(function(m) { return !primaryKeys.includes(m); });
+  var closeLbl = lang === "en" ? "Close" : lang === "es" ? "Cerrar" : "关闭";
+  var allLbl   = lang === "en" ? "All Features" : lang === "es" ? "Todo" : "所有功能";
+
+  var items = others.map(function(m) {
+    var icon = MOBILE_MORE_ICONS[m] || "📌";
+    var cls = state.module === m ? " active" : "";
+    return '<button class="mobile-more-item' + cls + '" data-m="' + m + '" type="button">'
+      + '<span class="more-item-icon">' + icon + '</span>'
+      + '<span class="more-item-label">' + t(m) + '</span></button>';
+  }).join("");
+
+  sheet.innerHTML = '<div class="mobile-more-header"><span>' + allLbl + '</span>'
+    + '<button class="mobile-more-close" id="mobile-more-close" type="button">' + closeLbl + ' ✕</button></div>'
+    + '<div class="mobile-more-grid">' + items + '</div>';
+
+  document.getElementById("mobile-more-close").addEventListener("click", closeMobileMoreSheet);
+  sheet.querySelectorAll(".mobile-more-item[data-m]").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      state.module = btn.dataset.m;
+      state.editId = null;
+      closeMobileMoreSheet();
+      renderApp();
+    });
+  });
+}

@@ -1,0 +1,22 @@
+{
+  "name": "OAKLIAN CRM",
+  "short_name": "OAKLIAN",
+  "description": "装修公司管理系统",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "icons": [
+    {
+      "src": "/assets/images/logo-oaklian-light.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/images/logo-oaklian-light.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

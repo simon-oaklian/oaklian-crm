@@ -2,8 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>OAKLIAN CRM</title>
+  <meta name="theme-color" content="#0F172A" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="OAKLIAN CRM" />
+  <link rel="manifest" href="/manifest.json" />
   <link id="app-favicon" rel="icon" href="/assets/images/favicon.png" />
   <link rel="stylesheet" href="/assets/css/styles.css?v=20260531-brand-favicon" />
   <link rel="stylesheet" href="/assets/css/estimates_v2.css?v=20260528-quote-flow4" />
@@ -53,7 +58,15 @@
   <div id="project-detail-drawer" class="drawer hidden"></div>
   <div id="vendor-ledger-drawer" class="drawer hidden"></div>
   <div id="project-cost-ledger-drawer" class="drawer hidden"></div>
-  <script src="/assets/js/app.js?v=20260614-contract-sign-23"></script>
+  <div id="mobile-tabbar" class="mobile-tabbar hidden"></div>
+  <div id="mobile-more-overlay" class="mobile-more-overlay hidden"></div>
+  <div id="mobile-more-sheet" class="mobile-more-sheet hidden"></div>
+  <script src="/assets/js/app.js?v=20260616-pwa-tabbar"></script>
   <script src="/assets/js/estimates_v2.js?v=20260611-payment-total"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function(){});
+    }
+  </script>
 </body>
 </html>
