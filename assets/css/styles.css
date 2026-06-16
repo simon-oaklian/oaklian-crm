@@ -2583,4 +2583,179 @@ table td:last-child, table th:last-child { white-space: nowrap; min-width: 240px
   }
 
   /* 非首页：topbar 已通过通用规则压缩，此处无需额外覆盖 */
+
+  /* ===== 全模块滚动补丁 ===== */
+
+  /* 通知中心：panel 自然高度，#main 纵向滚动 */
+  body[data-module="notifications"] #main {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 68px;
+  }
+  body[data-module="notifications"] #main > .panel {
+    height: auto;
+    overflow: visible;
+    display: block;
+  }
+
+  /* 系统设置 / 用户管理：多个 section 兄弟全部可见 */
+  body[data-module="system_settings"] #main,
+  body[data-module="settings"] #main {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 68px;
+  }
+  body[data-module="system_settings"] #main > .panel,
+  body[data-module="system_settings"] #main > section,
+  body[data-module="settings"] #main > section,
+  body[data-module="settings"] #main > .panel {
+    height: auto;
+    overflow: visible;
+    display: block;
+  }
+
+  /* 设计师首页及其子模块 */
+  body[data-module="my_home"] #main,
+  body[data-module="my_projects"] #main,
+  body[data-module="my_assignments"] #main,
+  body[data-module="my_commissions"] #main {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 68px;
+  }
+  body[data-module="my_home"] #main > section,
+  body[data-module="my_projects"] #main > section,
+  body[data-module="my_projects"] #main > .panel,
+  body[data-module="my_assignments"] #main > section,
+  body[data-module="my_assignments"] #main > .panel,
+  body[data-module="my_commissions"] #main > section,
+  body[data-module="my_commissions"] #main > .panel {
+    height: auto;
+    overflow: visible;
+    display: block;
+  }
+  body[data-module="my_projects"] .table-wrap,
+  body[data-module="my_assignments"] .table-wrap,
+  body[data-module="my_commissions"] .table-wrap,
+  body[data-module="designers"] .table-wrap,
+  body[data-module="designer_applications"] .table-wrap,
+  body[data-module="designer_assignments"] .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  body[data-module="my_projects"] .table-wrap table,
+  body[data-module="my_assignments"] .table-wrap table,
+  body[data-module="my_commissions"] .table-wrap table,
+  body[data-module="designers"] .table-wrap table,
+  body[data-module="designer_applications"] .table-wrap table,
+  body[data-module="designer_assignments"] .table-wrap table {
+    width: max-content;
+    min-width: 100%;
+  }
+  body[data-module="my_projects"] .table-wrap th,
+  body[data-module="my_projects"] .table-wrap td,
+  body[data-module="my_assignments"] .table-wrap th,
+  body[data-module="my_assignments"] .table-wrap td,
+  body[data-module="my_commissions"] .table-wrap th,
+  body[data-module="my_commissions"] .table-wrap td {
+    white-space: nowrap;
+  }
+
+  /* 工序模板：单列布局 + #main 滚动 */
+  body[data-module="stage_templates"] #main {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 68px;
+  }
+  body[data-module="stage_templates"] .stage-template-layout {
+    height: auto;
+    grid-template-columns: 1fr;
+  }
+  body[data-module="stage_templates"] .stage-template-list-panel {
+    height: auto;
+    overflow: visible;
+  }
+  body[data-module="stage_templates"] .stage-template-list-panel .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  body[data-module="stage_templates"] .stage-template-list-panel .table-wrap table {
+    width: max-content;
+    min-width: 100%;
+  }
+  body[data-module="stage_templates"] .stage-template-list-panel .table-wrap th,
+  body[data-module="stage_templates"] .stage-template-list-panel .table-wrap td {
+    white-space: nowrap;
+  }
+
+  /* 报价单编辑器：ev2-shell 撑满 #main 并内部滚动 */
+  #main > .ev2-shell {
+    min-height: unset;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    padding-bottom: 68px;
+  }
+
+  /* 财务-供应商/账单：操作工具栏从5行→2行 */
+  .finance-ops-toolbar {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .finance-ops-toolbar-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .finance-ops-toolbar-actions button {
+    font-size: 12px;
+    padding: 6px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .finance-ops-toolbar-filters {
+    flex-wrap: nowrap;
+  }
+  .finance-ops-toolbar-filters > input {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .finance-ops-toolbar-filters > button {
+    flex: 0 0 auto;
+  }
+  .finance-ops-toolbar-filters > select {
+    flex: 0 1 110px;
+    min-width: 0;
+    width: 110px;
+  }
+
+  /* 文档模块：手机端显示表格可横向滑动 */
+  body[data-module="documents"] #main > .panel {
+    overflow-y: auto;
+  }
+  body[data-module="documents"] .crud-layout {
+    height: auto;
+    overflow: visible;
+  }
+  body[data-module="documents"] .crud-layout .table-wrap {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  body[data-module="documents"] .crud-layout .table-wrap table {
+    width: max-content;
+    min-width: 100%;
+  }
+  body[data-module="documents"] .crud-layout .table-wrap th,
+  body[data-module="documents"] .crud-layout .table-wrap td {
+    white-space: nowrap;
+  }
+
+  /* 抽屉面板：防止整体横向空白滑动 */
+  .drawer-panel {
+    overflow-x: hidden;
+  }
 }
