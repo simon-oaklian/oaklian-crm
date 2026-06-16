@@ -1750,7 +1750,7 @@ def init_db():
         SET sign_status='draft'
         WHERE sign_status IS NULL
            OR TRIM(sign_status)=''
-           OR LOWER(sign_status) NOT IN ('draft','sent','signed')
+           OR LOWER(sign_status) NOT IN ('draft','sent','customer_signed','signed')
         """
     )
     cur.execute(
@@ -13077,7 +13077,8 @@ body{{font-family:Arial,sans-serif;background:#f4f5f7;color:#0f172a;margin:0}}
                 incoming_sign = self._contract_sign_status_key(payload.get("sign_status") or payload.get("signed_status"))
                 allowed_from = {
                     "sent": {"draft"},
-                    "signed": {"sent"},
+                    "customer_signed": {"draft", "sent"},
+                    "signed": {"sent", "customer_signed"},
                 }
                 if incoming_sign != current_sign and current_sign not in allowed_from.get(incoming_sign, set()):
                     conn.close()

@@ -3788,8 +3788,9 @@ async function renderContractDetailView(row) {
   if (formTitle) formTitle.textContent = row.contract_no || "合同详情";
 
   const signStatus = normalizeEnum(row.sign_status || "draft");
-  const signColor = signStatus === "signed" ? "#22c55e" : signStatus === "sent" ? "#f59e0b" : "#9ca3af";
-  const signLabel = signStatus === "signed" ? "已签署" : signStatus === "sent" ? "已发送" : "草稿";
+  const isCustomerSigned = signStatus === "customer_signed";
+  const signColor = signStatus === "signed" ? "#22c55e" : (signStatus === "sent" || isCustomerSigned) ? "#f59e0b" : "#9ca3af";
+  const signLabel = signStatus === "signed" ? "已签署" : isCustomerSigned ? "客户已签·待内部确认" : signStatus === "sent" ? "已发送" : "草稿";
   const isSigned = signStatus === "signed";
   const money = (v) => v != null && v !== "" ? "$" + Number(v).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}) : "-";
 
@@ -3920,10 +3921,10 @@ async function renderContractDetailView(row) {
     <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #e0e7ff;border-radius:8px;background:#eef2ff">
       <div style="font-size:10px;font-weight:700;color:#6366f1;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">内部操作</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${!row.customer_signature_image && signStatus !== "signed"
+        ${(signStatus === "draft" || signStatus === "sent")
           ? `<button id="int-send-sign-btn" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #6366f1;background:#fff;cursor:pointer;color:#6366f1">📤 发送签署链接</button>`
           : ""}
-        ${row.customer_signature_image && signStatus !== "signed"
+        ${(signStatus === "sent" || signStatus === "customer_signed")
           ? `<button id="int-confirm-sign-btn" type="button" style="font-size:12px;padding:6px 12px;border-radius:6px;border:none;background:#22c55e;cursor:pointer;color:#fff;font-weight:500">✅ 内部确认签署</button>`
           : ""}
         ${signStatus === "signed" && !(row.linked_project_id || row.project_id)
@@ -6826,6 +6827,7 @@ function renderCrudMobileCards(module, rows = []) {
       ? `<select class="crud-card-status-select" data-act="contract-sign-status" data-id="${esc(row.id ?? "")}">
           <option value="draft"${ss === "draft" ? " selected" : ""}>${t("value_sign_status_draft")}</option>
           <option value="sent"${ss === "sent" ? " selected" : ""}>${t("value_sign_status_sent")}</option>
+          <option value="customer_signed"${ss === "customer_signed" ? " selected" : ""}>客户已签</option>
           <option value="signed"${ss === "signed" ? " selected" : ""}>${t("value_sign_status_signed")}</option>
         </select>`
       : `<div class="crud-mobile-id">#${esc(row.id ?? "")}</div>`;

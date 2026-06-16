@@ -1432,7 +1432,7 @@ const CRUD_SCHEMA = {
   },
   contracts: {
     fields: ["customer_id", "project_id", "estimate_id", "title", "address", "contract_no", "total_amount", "payment_plan_json", "signed_status", "signed_date", "attachment_url"],
-    table: ["id", "contract_no", "signed_status", "total_amount", "signed_date"],
+    table: ["id", "contract_no", "customer_name", "signed_status", "total_amount", "signed_date"],
   },
   projects: {
     fields: [
@@ -1454,7 +1454,7 @@ const CRUD_SCHEMA = {
       "designer_commission_base",
       "notes",
     ],
-    table: ["id", "name", "status", "progress_pct", "manager", "designer_name", "estimated_finish_date"],
+    table: ["id", "name", "customer_name", "status", "progress_pct", "manager", "designer_name", "estimated_finish_date"],
   },
   change_orders: {
     fields: [
@@ -4185,6 +4185,28 @@ async function renderRecordLinkPanel(module, row = null) {
             <button data-rel-act="export-contract-pdf" data-contract-id="${row.id}">${t("export_contract_pdf")}</button>
           </div>
         </div>
+        <div class="list-item">
+          <div><b>客户电子签署</b></div>
+          <div style="font-size:12px;color:#667085;margin-bottom:6px;">
+            ${row.customer_signature_image
+              ? '<span style="color:#22c55e;font-weight:600;">✓ 客户已签署</span>'
+              : row.sign_token
+                ? '<span style="color:#f59e0b;">链接已生成，等待客户签署</span>'
+                : '<span style="color:#9ca3af;">未发送</span>'}
+          </div>
+          ${row.sign_token && !row.customer_signature_image ? `
+          <div style="font-size:12px;background:#f3f4f6;padding:6px 8px;border-radius:4px;word-break:break-all;margin-bottom:6px;">
+            ${window.location.origin}/sign/${row.sign_token}
+          </div>` : ''}
+          <div class="row gap" style="margin-top:6px;">
+            ${!row.customer_signature_image
+              ? `<button data-rel-act="generate-sign-link" data-contract-id="${row.id}">${row.sign_token ? "重新生成链接" : "生成签署链接"}</button>`
+              : ''}
+            ${row.sign_token
+              ? `<button data-rel-act="copy-sign-link" data-token="${row.sign_token}" class="secondary">复制链接</button>`
+              : ''}
+          </div>
+        </div>
       </div>
     `;
   } else {
@@ -4248,6 +4270,25 @@ async function renderRecordLinkPanel(module, row = null) {
       }
       if (act === "export-contract-pdf") {
         window.open(`/api/contracts/${btn.dataset.contractId}/pdf?lang=${encodeURIComponent(state.pdfLang)}`, "_blank");
+        return;
+      }
+      if (act === "generate-sign-link") {
+        const r = await api(`/api/contracts/${btn.dataset.contractId}/generate-sign-link`, { method: "POST" });
+        if (r.sign_url) {
+          const full = window.location.origin + r.sign_url;
+          await navigator.clipboard.writeText(full).catch(() => {});
+          alert("签署链接已生成并复制到剪贴板：
+" + full);
+          await openContractDetail(Number(btn.dataset.contractId));
+        }
+        return;
+      }
+      if (act === "copy-sign-link") {
+        const full = window.location.origin + "/sign/" + btn.dataset.token;
+        await navigator.clipboard.writeText(full).catch(() => {});
+        alert("链接已复制：
+" + full);
+        return;
       }
     });
   });
