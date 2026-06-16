@@ -1992,6 +1992,7 @@ button:active:not(:disabled),
   .sidebar {
     flex: 0 0 auto;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 6px 12px;
   }
   /* 非首页完全隐藏 sidebar，把空间留给内容 */
   body:not([data-module="dashboard"]) .sidebar {
@@ -2004,21 +2005,22 @@ button:active:not(:disabled),
   .brand-lockup,
   body[data-module="dashboard"] .brand-lockup,
   body:not([data-module="dashboard"]) .brand-lockup {
-    min-height: 46px;
+    min-height: 34px;
     margin: 0;
+    gap: 8px;
   }
   .brand-icon,
   body[data-module="dashboard"] .brand-icon,
   body:not([data-module="dashboard"]) .brand-icon {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
   }
   .sidebar h1,
   body[data-module="dashboard"] .sidebar h1,
   body:not([data-module="dashboard"]) .sidebar h1 {
-    font-size: 19px;
-    line-height: 0.96;
+    font-size: 15px;
+    line-height: 1;
   }
   #brand-subtitle,
   body[data-module="dashboard"] #brand-subtitle,
@@ -2052,15 +2054,22 @@ button:active:not(:disabled),
   }
   .topbar {
     flex: 0 0 auto;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+  }
+  .topbar > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .topbar h2 {
-    font-size: 24px;
-    line-height: 1.1;
+    font-size: 15px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .topbar p {
     display: none;
@@ -2549,12 +2558,5 @@ table td:last-child, table th:last-child { white-space: nowrap; min-width: 240px
     white-space: nowrap;
   }
 
-  /* 非首页：topbar 页面标题行缩小，给内容更多空间 */
-  body:not([data-module="dashboard"]) .topbar h2 {
-    font-size: 20px;
-  }
-  body:not([data-module="dashboard"]) .topbar {
-    margin-bottom: 6px;
-    padding-bottom: 6px;
-  }
+  /* 非首页：topbar 已通过通用规则压缩，此处无需额外覆盖 */
 }
