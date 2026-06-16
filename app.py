@@ -5056,7 +5056,7 @@ class CRMHandler(BaseHTTPRequestHandler):
                 return
             if self._handle_change_order_print_view(path, user, query):
                 return
-            return self._json_response({"error": "Not found"}, 404)
+            return self._serve_404_page()
 
         if path == "/api/auth/me":
             return self._auth_me()
@@ -5173,7 +5173,7 @@ class CRMHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/"):
             return self._resource_get(path, query, user)
 
-        return self._json_response({"error": "Not found"}, 404)
+        return self._serve_404_page()
 
     def do_POST(self):
         if ev2_routes.handle_post(self, get_conn): return
