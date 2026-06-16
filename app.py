@@ -3733,6 +3733,8 @@ class CRMHandler(BaseHTTPRequestHandler):
             return "signed"
         if key == "sent":
             return "sent"
+        if key == "customer_signed":
+            return "customer_signed"
         return "draft"
 
     def _contract_legacy_signed_status(self, sign_status):
@@ -7734,7 +7736,7 @@ class CRMHandler(BaseHTTPRequestHandler):
         target = self._contract_sign_status_key(target_status)
         allowed_from = {
             "sent": {"draft"},
-            "signed": {"sent"},
+            "signed": {"sent", "customer_signed"},
         }
         if current != target and current not in allowed_from.get(target, set()):
             conn.close()

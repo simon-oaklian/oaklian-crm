@@ -3228,6 +3228,17 @@ function fmtMoney(v) {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+function fmtShortDate(iso) {
+  if (!iso || iso === "-") return "-";
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso).slice(0, 16).replace("T", " ");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${mm}/${dd} ${hh}:${min}`;
+}
+
 function fmtCurrency(v) {
   if (v === null || v === undefined || v === "") return "-";
   const n = Number(v);
@@ -3976,11 +3987,18 @@ async function renderContractDetailView(row) {
   document.getElementById("int-confirm-sign-btn")?.addEventListener("click", async () => {
     if (!confirm("确认内部签署？合同状态将变为已签署。")) return;
     const btn = document.getElementById("int-confirm-sign-btn");
+    const origText = btn.textContent;
     btn.textContent = "处理中..."; btn.disabled = true;
-    await api(`/api/contracts/${row.id}/mark-signed`, { method: "POST" });
-    const updated = await api(`/api/contracts/${row.id}`);
-    await renderContractDetailView(updated);
-    await loadCrud("contracts");
+    try {
+      await api(`/api/contracts/${row.id}/mark-signed`, { method: "POST" });
+      const updated = await api(`/api/contracts/${row.id}`);
+      await renderContractDetailView(updated);
+      await loadCrud("contracts");
+    } catch (e) {
+      btn.textContent = origText;
+      btn.disabled = false;
+      alert("签署失败：" + (e.message || "未知错误"));
+    }
   });
   document.getElementById("int-gen-project-btn")?.addEventListener("click", async () => {
     const btn = document.getElementById("int-gen-project-btn");
@@ -5388,6 +5406,7 @@ function crudScaffold(module) {
           <input id="keyword" placeholder="keyword" />
           <button id="search-btn">${t("search")}</button>
           ${isDocumentsReadOnly ? "" : `<button id="new-btn">${t("create")}</button>`}
+          <div class="crud-filter-break"></div>
           ${customerFilterCtl}
           ${designerApplicationFilterCtl}
           ${designerFilterCtl}
@@ -6626,10 +6645,12 @@ function renderCustomerMobileCards(rows = []) {
   host.innerHTML = rows.map((r) => {
     const status = r.status || "new";
     const updated = r.updated_at || r.created_at || "-";
+    const srcTag = r.source_channel ? `<span class="cmc-tag">${displayValue("source_channel", r.source_channel)}</span>` : "";
+    const inqTag = r.inquiry_type ? `<span class="cmc-tag">${displayValue("inquiry_type", r.inquiry_type)}</span>` : "";
     return `
       <article class="customer-mobile-card" data-row-id="${esc(r.id ?? "")}">
         <div class="customer-mobile-card-main">
-          <div>
+          <div class="customer-mobile-identity">
             <div class="customer-mobile-title">${esc(r.name || "-")}</div>
             <div class="customer-mobile-phone">${esc(r.phone || "-")}</div>
           </div>
@@ -6638,15 +6659,14 @@ function renderCustomerMobileCards(rows = []) {
           </select>
         </div>
         <div class="customer-mobile-meta">
-          <span>${esc(fieldLabel("source_channel"))}: ${displayValue("source_channel", r.source_channel || "-")}</span>
-          <span>${esc(fieldLabel("inquiry_type"))}: ${displayValue("inquiry_type", r.inquiry_type || "-")}</span>
-          <span>${esc(fieldLabel("updated_at"))}: ${esc(updated)}</span>
+          ${srcTag}${inqTag}
+          <span class="cmc-date">${fmtShortDate(updated)}</span>
         </div>
         <div class="customer-mobile-actions">
           <button data-act="gen-estimate-cust" data-id="${esc(r.id ?? "")}">${t("generate_estimate")}</button>
           <button data-act="quick-followup-cust" data-id="${esc(r.id ?? "")}" class="secondary">${t("quick_followup")}</button>
           <button data-act="edit" data-id="${esc(r.id ?? "")}" class="secondary">${t("edit")}</button>
-          <button data-act="del" data-id="${esc(r.id ?? "")}" class="danger">${t("del")}</button>
+          <button data-act="del" data-id="${esc(r.id ?? "")}" class="danger">✕</button>
         </div>
       </article>
     `;
@@ -6775,6 +6795,19 @@ function bindCrudMobileCards() {
       .find((x) => (x.dataset.act || "") === act && String(x.dataset.id || "") === id);
     if (tableBtn) tableBtn.click();
   });
+  host.addEventListener("change", async (e) => {
+    const sel = e.target.closest("select[data-act='contract-sign-status']");
+    if (!sel) return;
+    const id = sel.dataset.id;
+    const val = sel.value;
+    const endpoint = val === "signed" ? "mark-signed" : val === "sent" ? "mark-sent" : null;
+    if (endpoint) {
+      await api(`/api/contracts/${id}/${endpoint}`, { method: "POST" });
+    } else {
+      await api(`/api/contracts/${id}`, { method: "PUT", body: JSON.stringify({ sign_status: val }) });
+    }
+    await loadCrud("contracts");
+  });
 }
 
 function renderCrudMobileCards(module, rows = []) {
@@ -6786,14 +6819,24 @@ function renderCrudMobileCards(module, rows = []) {
     return;
   }
   const cols = mobileCrudColumns(module);
-  host.innerHTML = rows.map((row) => `
+  host.innerHTML = rows.map((row) => {
+    const isContracts = module === "contracts";
+    const ss = isContracts ? normalizeEnum(row.sign_status || "draft") : "";
+    const headRight = isContracts
+      ? `<select class="crud-card-status-select" data-act="contract-sign-status" data-id="${esc(row.id ?? "")}">
+          <option value="draft"${ss === "draft" ? " selected" : ""}>${t("value_sign_status_draft")}</option>
+          <option value="sent"${ss === "sent" ? " selected" : ""}>${t("value_sign_status_sent")}</option>
+          <option value="signed"${ss === "signed" ? " selected" : ""}>${t("value_sign_status_signed")}</option>
+        </select>`
+      : `<div class="crud-mobile-id">#${esc(row.id ?? "")}</div>`;
+    return `
     <article class="crud-mobile-card" data-row-id="${esc(row.id ?? "")}">
       <div class="crud-mobile-card-head">
         <div class="crud-mobile-title">${esc(mobileCrudTitle(module, row))}</div>
-        <div class="crud-mobile-id">#${esc(row.id ?? "")}</div>
+        ${headRight}
       </div>
       <div class="crud-mobile-fields">
-        ${cols.map((col) => `
+        ${cols.filter((col) => !isContracts || col !== "sign_status").map((col) => `
           <div class="crud-mobile-field">
             <span>${esc(fieldLabel(col))}</span>
             <b>${mobileCrudValue(module, row, col)}</b>
@@ -6804,7 +6847,8 @@ function renderCrudMobileCards(module, rows = []) {
         ${mobileCrudActions(module, row)}
       </div>
     </article>
-  `).join("");
+    `;
+  }).join("");
   applyActionButtonTitles(host);
 }
 
@@ -8502,6 +8546,7 @@ async function renderCrud(module) {
   if (module === "change_orders") await renderChangeOrderProjectFilter();
 
   q("#search-btn")?.addEventListener("click", () => loadCrud(module));
+  q("#keyword")?.addEventListener("keydown", (e) => { if (e.key === "Enter") loadCrud(module); });
   q("#contract-template-btn")?.addEventListener("click", async () => {
     const tpls = await api("/api/document-templates?template_type=contract");
     const list = tpls.items || tpls || [];
